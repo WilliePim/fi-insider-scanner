@@ -1,0 +1,105 @@
+# Tutte le soglie della pipeline. Lo sha256 di questo file viene congelato in
+# backtest/preregistration.md prima di calcolare qualsiasi rendimento futuro:
+# ogni modifica successiva richiede un nuovo ADR in DECISIONS.md.
+
+[meta]
+version = 1
+
+[source]
+bulk_url = "https://raw.githubusercontent.com/civictechsweden/oppna-insynsregistret/main/data/insynsregistret.csv"
+upstream_repo = "civictechsweden/oppna-insynsregistret"
+upstream_path = "data/insynsregistret.csv"
+# Snapshot pinnato per il backtest (ADR-001). sha256 del file: vedi manifest e 00_ingest_profile.md.
+pinned_commit = "27d8523376497b0eac9759edf6ae319e828d8c55"
+pinned_sha256 = "462fbf2cc9bc88f1f64f1d4177946bdbafecc7113f231a4720bb123d42af02c5"
+# Full fetch upstream 2026-08-19 meno lookback 3 giorni: dopo questa data gli
+# status delle righe vecchie possono non essere aggiornati (ADR-002).
+stale_status_horizon = "2026-08-16"
+
+[fi_export]
+base_url = "https://marknadssok.fi.se/Publiceringsklient/sv-SE/Search/Search"
+pause_seconds = 5.0
+max_requests = 20
+row_cap = 1000
+user_agent = "fi-insider-scanner/0.1 (research)"
+
+[openmarket]
+min_usd_per_row = 25000.0
+
+[cluster]
+min_persons = 3
+window_days = 30
+max_staleness_days = 30
+episode_cooldown_days = 30
+
+[structural]
+min_persons_same_price = 3
+subscription_price_window_days = 20
+
+[dilution]
+participation_days = 5
+trap_days = 75
+growth_blocked = 0.25
+growth_caution = 0.10
+baseline_gap_min_days = 180
+baseline_gap_max_days = 700
+shares_lag_days = 45
+
+[routine]
+lookback_days = 365
+min_months = 6
+max_dispersion = 0.25
+
+[large_holder]
+position_share_threshold = 0.10
+
+[symbolic]
+max_position_change = 0.01
+
+[sell_to_cover]
+window_days = 30
+
+[closed_period]
+window_days_primary = 10
+window_days_descriptive = 30
+
+[band]
+# USD, chiusa a sinistra: [50M, 300M)
+low_usd = 50000000.0
+high_usd = 300000000.0
+edge_sensitivity = 0.20
+
+[backtest]
+horizons = [21, 63, 126]
+primary_horizon = 126
+start = "2016-07-01"
+end = "2025-12-31"
+cooldown_calendar_days = 126
+cost_bps = 100
+artefact_abs_return = 5.0
+large_daily_move = 0.40
+benchmark = "^OMXSPI"
+fx_usdsek = "SEK=X"
+quiet_days_control = 60
+bootstrap_draws = 1000
+bootstrap_seed = 12345
+min_clusters_for_cr1 = 10
+min_coverage_for_verdict = 0.60
+placebo_shift_sessions = 252
+max_stale_sessions = 5
+
+[resolver]
+pause_seconds = 0.5
+price_tolerance = 0.02
+min_rows_verify = 3
+min_share_verified = 0.80
+
+[survivorship]
+s_plus_excess = 0.15
+acquired_lookback_days = 120
+seed = 12345
+
+[caso_zero]
+window_start = "2026-06-16"
+window_end = "2026-09-14"
+refresh_lookback_days = 120
