@@ -8,13 +8,14 @@ import re
 from pathlib import Path
 
 SRC = Path(__file__).resolve().parents[1] / "src" / "fi_insider_scanner"
+DOSSIER_DIR = Path(__file__).resolve().parents[1] / "dossier"
 
 FORBIDDEN_MODULES = ("form4_scanner", "invest_system", "compounder_watch", "edgar_llm")
 FORBIDDEN_PATH_FRAGMENTS = ("form4-scanner", "invest-system", "compounder-watch")
 DECIDING_PACKAGES = ("gates", "backtest/events.py", "backtest/control.py")
 BANNED_WORDS = re.compile(
-    r"raccomand|consigli|\bcompra\b|\bvendi\b|recommend|target price|köprekommendation|"
-    r"opportunit|promettente|should buy",
+    r"raccomand|\bconsigli(o|a|ato|ata|ati|ate|amo|erei|erebbe)\b|\bcompra(re|te|to)?\b|\bvendi\b|\bvendere\b|"
+    r"recommend|target price|köprekommendation|opportunit|promettente|should buy|\bbuy\b|\bsell\b",
     re.IGNORECASE,
 )
 
@@ -72,8 +73,30 @@ def test_deciding_modules_read_register_only_through_visibility():
             assert forbidden not in text, f"{path}: accesso diretto ({forbidden}); usare visibility.visible()"
 
 
-def test_no_recommendation_vocabulary_in_templates():
-    for path in list((SRC / "dossier").rglob("*.py")) + list((SRC / "backtest").rglob("report.py")):
+def test_banned_regex_has_word_boundaries():
+    # la parola "consigliere" (membro del consiglio) non deve scattare; "consiglio di comprare" sì
+    assert BANNED_WORDS.search("consigliere dal 2014") is None
+    assert BANNED_WORDS.search("vi consiglio di comprare") is not None
+    assert BANNED_WORDS.search("Russell 2000") is None
+    assert BANNED_WORDS.search("a buy signal") is not None
+
+
+def test_no_recommendation_vocabulary_in_templates_and_dossiers():
+    files = list((SRC / "dossier").rglob("*.py")) + list((SRC / "backtest").rglob("report.py"))
+    if DOSSIER_DIR.exists():
+        files += sorted(DOSSIER_DIR.glob("*.md"))
+    for path in files:
         text = path.read_text(encoding="utf-8")
         m = BANNED_WORDS.search(text)
         assert m is None, f"{path}: vocabolario vietato '{m.group(0)}'"
+
+
+def test_dossiers_carry_missingness_section_and_no_verdict():
+    if not DOSSIER_DIR.exists():
+        return
+    for path in DOSSIER_DIR.glob("*_*.md"):
+        if path.name.endswith("_candidati.md"):
+            continue
+        text = path.read_text(encoding="utf-8")
+        assert "NON VERIFICATO / MISSINGNESS" in text, path
+        assert "Nessun verdetto" in text, path
