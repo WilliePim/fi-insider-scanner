@@ -102,4 +102,24 @@ Nessuna chiamata a modelli linguistici in nessun passo: token e costo per run = 
 
 ## Cosa non è stato possibile fare
 
-Elenco aggiornato in fondo a `backtest/20_verdict.md` e nella sezione "Limiti" di `DECISIONS.md` (ADR-032, ADR-034, ADR-042).
+Elenco in fondo a `backtest/20_verdict.md`; decisioni collegate: ADR-032, ADR-034, ADR-042, ADR-043.
+
+
+## Risultati (snapshot `27d8523376`, configurazione `b67e29d7…`, run 2026-09-14)
+
+Verdetto pre-registrato: **NON REGGE** (criterio: matched control con media ≤ 0). Dettagli in `backtest/20_verdict.md`.
+
+| cella (126 sessioni, variante b, eccesso) | n | media | mediana | t iid | t CR1 emittente | CI 95% | MDE |
+|---|---|---|---|---|---|---|---|
+| **P: A, 50-300M, vs OMXSPI** (primaria) | 817 | −2,39% | −4,75% | −1,83 | −1,96 | [−5,00%, +0,12%] | 3,66% |
+| C: stessi eventi vs peer stessa banda | 817 | −0,58% | 0,00% | −0,33 | −0,34 | [−3,80%, +2,54%] | 4,90% |
+| A, <50M, vs OMXSPI / vs peer | 509 | +1,66% / +4,17% | | 0,85 / 1,38 | | | |
+| A, >300M, vs OMXSPI / vs peer | 1.892 | −0,05% / +0,23% | | −0,09 / 0,29 | | | |
+| B: cluster 4/4, 50-300M, vs OMXSPI / vs peer | 238 | −1,22% / −0,62% | | −0,48 / −0,18 | | | 7,06% |
+| placebo (−252 sessioni) vs OMXSPI / vs peer | 636 | +1,76% / **+4,54%** | | 1,19 / **2,31** | | | |
+
+Per anno la P e' positiva nel 2016-2018 e 2020 (piccoli n) e negativa dal 2022 al 2025; la scomposizione mostra che la parte contro l'indice e' quasi tutta effetto dimensione. Copertura della P: 68,3% degli eventi A (b) ha un rendimento osservabile; 2.126 eventi senza banda. Formule, tutte le celle, closed period e survivorship nei report 10-13.
+
+Riferimento USA (stessa definizione): +3,50% (t 4,30, iid) vs IWM; matched control +2,41% (t 2,02).
+
+Caso zero: `dossier/2026-09-14_saniona-ab.md` (Saniona AB, T = 2026-09-01, tre persone, punteggio provvisorio 5/9*, nessun verdetto).
