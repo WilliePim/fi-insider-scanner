@@ -461,3 +461,16 @@ risultavano `PRICE_MISMATCH` pur avendo il ticker giusto.
 
 **Test:** `tests/test_market.py::test_yahoo_rescaled_history_is_detected_and_verification_uses_recent_rows`,
 `test_recent_mismatch_is_still_rejected`, `tests/test_returns.py::test_mcap_point_in_time_and_band`.
+
+
+## ADR-043 — Lista delle date report incompleta → closed period UNKNOWN
+
+**Contesto.** Il caso zero (Saniona) ha mostrato che l'ultima data report nota a Yahoo puo' essere del 2022 mentre
+l'emittente pubblica ogni trimestre: `days_since_report` = 1.560 giorni non significa "fuori dalla finestra
+post-report", significa lista incompleta. Le small cap hanno spesso liste vuote o vecchie (report 05).
+
+**Decisione** (prima del congelamento). Un emittente quotato riporta almeno ogni sei mesi: se l'ultima data nota precede T
+di oltre 200 giorni, l'attributo vale UNKNOWN. Si applica nelle celle closed period del backtest e nel dossier; il calcolo
+grezzo resta salvato per trasparenza. Le date report del dossier vengono dalla fonte primaria (comunicati, report).
+
+**Test:** `tests/test_gates.py::test_closed_period` (1.560 → UNKNOWN, 150 → OUTSIDE).

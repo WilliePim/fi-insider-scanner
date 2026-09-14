@@ -180,8 +180,10 @@ def build_dossier(case: pd.Series, register: Register, cfg: dict, shares_out: fl
     if report_dates is not None and len(report_dates):
         past = report_dates[report_dates <= as_of]
         future = report_dates[report_dates > as_of]
+        dsr = None if case["days_since_report"] is None or pd.isna(case["days_since_report"]) else int(case["days_since_report"])
+        stale = " — lista incompleta (ultima data oltre 200 giorni prima di T): attributo della pipeline UNKNOWN, vale la fonte primaria" if dsr is not None and dsr > 200 else ""
         w(f"- Date report note a Yahoo: ultima prima di T {past.max().date() if len(past) else '—'} "
-          f"({'—' if case['days_since_report'] is None or pd.isna(case['days_since_report']) else int(case['days_since_report'])} giorni prima di T); prossime {', '.join(str(d.date()) for d in future[:3]) or '—'}.")
+          f"({'—' if dsr is None else dsr} giorni prima di T){stale}; prossime {', '.join(str(d.date()) for d in future[:3]) or '—'}.")
         w("- Closed period MAR: 30 giorni prima di ogni report; gli acquisti PDMR si concentrano strutturalmente nei giorni successivi (attributo, non segnale).")
     else:
         w("- Date report: UNKNOWN su Yahoo. Closed period non calcolabile dalla pipeline.")

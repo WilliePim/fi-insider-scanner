@@ -123,8 +123,11 @@ def _cells_by_band(ev: pd.DataFrame, cfg: dict, prefix: str) -> list[tuple[str, 
 
 
 def _closed_period(ev: pd.DataFrame, cfg: dict, label: str, value: str) -> list[tuple[str, object]]:
+    from ..gates.closed_period import MAX_REPORT_GAP_DAYS
+
     rows = []
-    d = ev["days_since_report"]
+    # lista report incompleta (ultima data > 200 gg prima di T) -> UNKNOWN (ADR-043)
+    d = ev["days_since_report"].where(ev["days_since_report"] <= MAX_REPORT_GAP_DAYS)
     for w in (cfg["closed_period"]["window_days_primary"], cfg["closed_period"]["window_days_descriptive"]):
         rows.append((f"{label}: dentro finestra post-report ≤ {w} gg", run.cell(ev[d.notna() & (d <= w)], value, cfg)))
         rows.append((f"{label}: fuori finestra (> {w} gg)", run.cell(ev[d.notna() & (d > w)], value, cfg)))

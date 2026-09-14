@@ -102,6 +102,8 @@ def test_closed_period():
     assert window_label(40, 10) == "OUTSIDE"
     assert days_since_report(None, T("2020-04-28")) is None
     assert window_label(None, 10) == "UNKNOWN"
+    assert window_label(1560, 10) == "UNKNOWN"  # lista Yahoo incompleta (ADR-043)
+    assert window_label(150, 10) == "OUTSIDE"
 
 
 def test_layer1_score():
