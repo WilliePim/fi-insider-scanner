@@ -84,7 +84,7 @@ Dettagli e distribuzioni: `backtest/00_ingest_profile.md`, `backtest/01_canonica
 
 ```
 uv sync
-uv run pytest                      # 178 test offline
+uv run pytest                      # 180 test offline
 uv run fi-scan ingest              # snapshot bulk pinnato -> data/raw/bulk
 uv run fi-scan profile             # 00_ingest_profile.md
 uv run fi-scan canon               # tabella canonica in data/fi.sqlite, 01_canonical.md
