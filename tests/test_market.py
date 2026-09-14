@@ -3,7 +3,7 @@ import pandas as pd
 import pytest
 
 from fi_insider_scanner.market.fx import FxOrientationError, attach_values, check_orientation
-from fi_insider_scanner.market.prices import raw_close, split_factor_after, verify_against_register
+from fi_insider_scanner.market.prices import ScaleSegment, estimate_scale_segments, raw_close, scale_at, split_factor_after, verify_against_register
 
 T = pd.Timestamp
 
@@ -64,3 +64,33 @@ def test_verify_against_register():
     assert v.verified is False and v.reason == "SCALE_SUSPECT"
     assert verify_against_register(h, ok.head(2), 0.02, 3, 0.8).verified is None
     assert verify_against_register(None, ok, 0.02, 3, 0.8).reason == "NO_HISTORY"
+
+
+def test_yahoo_rescaled_history_is_detected_and_verification_uses_recent_rows():
+    # Yahoo ha riscalato la storia prima del 2020-06-01 di 1/1,2 (emissione di diritti); il registro ha prezzi reali.
+    idx = pd.date_range("2019-01-01", "2021-12-31", freq="B")
+    true_close = np.full(len(idx), 100.0)
+    yahoo_close = np.where(idx < pd.Timestamp("2020-06-01"), true_close / 1.2, true_close)
+    h = pd.DataFrame({"Close": yahoo_close, "Low": yahoo_close * 0.99, "High": yahoo_close * 1.01}, index=idx)
+    h["Stock Splits"] = 0.0
+    days = idx[::25]
+    trades = pd.DataFrame({"trade_date": days, "price": np.full(len(days), 100.0)})
+    v = verify_against_register(h, trades, 0.02, 3, 0.8)
+    assert v.verified is True and v.adjusted_history is True
+    assert v.share_in_range < 0.8 <= v.share_in_range_recent
+    segs = estimate_scale_segments(h, trades)
+    assert len(segs) == 2
+    assert segs[0].factor == pytest.approx(1.2, rel=0.01) and segs[1].factor == pytest.approx(1.0, rel=0.01)
+    early = raw_close(h, pd.Series([T("2019-03-01")]), segs)[0]
+    assert early == pytest.approx(100.0, rel=0.01)
+    assert scale_at(segs, pd.Series([T("2018-01-01")]))[0] == pytest.approx(1.2, rel=0.01)  # prima di ogni tratto: il più vicino
+
+
+def test_recent_mismatch_is_still_rejected():
+    idx = pd.date_range("2019-01-01", "2021-12-31", freq="B")
+    close = np.full(len(idx), 100.0)
+    h = pd.DataFrame({"Close": close, "Low": close * 0.99, "High": close * 1.01}, index=idx)
+    h["Stock Splits"] = 0.0
+    days = idx[::25]
+    trades = pd.DataFrame({"trade_date": days, "price": np.full(len(days), 150.0)})
+    assert verify_against_register(h, trades, 0.02, 3, 0.8).verified is False

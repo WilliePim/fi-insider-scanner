@@ -8,6 +8,18 @@ import pandas as pd
 
 from ..backtest.events import MarketContext
 from . import yf_cache
+from .prices import ScaleSegment
+
+
+def parse_segments(text) -> list[ScaleSegment]:
+    if not isinstance(text, str) or not text:
+        return []
+    out = []
+    for part in text.split(";"):
+        rng, factor, n = part.rsplit(":", 2)
+        start, end = rng.split("..")
+        out.append(ScaleSegment(pd.Timestamp(start), pd.Timestamp(end), float(factor), int(n)))
+    return out
 
 
 class YahooMarket:
@@ -24,6 +36,14 @@ class YahooMarket:
         usable = res[res["ok"] | (res["none"] & (not primary_only_verified))]
         self._by_isin = dict(zip(usable["isin"], usable["symbol"]))
         self._verified_by_isin = dict(zip(res["isin"], res["ok"]))
+        segs = res["scale_segments"] if "scale_segments" in res else pd.Series([""] * len(res), index=res.index)
+        best: dict[str, tuple[int, list[ScaleSegment]]] = {}
+        for sym, text, nrows in zip(res["symbol"], segs, res["n_rows"]):
+            parsed = parse_segments(text)
+            # per simbolo tengo i tratti dell'ISIN con più righe (lo stesso ticker può servire più ISIN storici)
+            if parsed and (sym not in best or nrows > best[sym][0]):
+                best[sym] = (int(nrows), parsed)
+        self._segments_by_symbol = {k: v[1] for k, v in best.items()}
         ranked = usable.sort_values(["ok", "n_rows"], ascending=[False, False])
         self._by_issuer = ranked.groupby("issuer_key")["symbol"].first().to_dict()
         self.with_reports = with_reports
@@ -35,6 +55,9 @@ class YahooMarket:
 
     def is_verified(self, isin: str | None) -> bool | None:
         return self._verified_by_isin.get(isin)
+
+    def segments(self, symbol: str | None) -> list[ScaleSegment]:
+        return self._segments_by_symbol.get(symbol, []) if symbol else []
 
     def symbol_for_isin(self, isin: str | None) -> str | None:
         """Solo il ticker dell'ISIN stesso (verificato o non verificabile): nessun ripiego su altre classi."""

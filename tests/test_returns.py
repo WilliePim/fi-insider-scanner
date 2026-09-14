@@ -86,7 +86,10 @@ def test_mcap_point_in_time_and_band():
     h.loc[T("2019-02-01"), "Stock Splits"] = 2.0
     shares = pd.Series([5_000_000.0], index=pd.DatetimeIndex([T("2018-10-15")]))
     p = mcap_at(h, shares, T("2019-01-02"), 45)
-    assert p.reason == "OK" and p.close_raw == pytest.approx(20.0) and p.mcap_sek == pytest.approx(100_000_000.0)
+    assert p.reason == "OK" and p.close_raw_yahoo == pytest.approx(20.0) and p.mcap_sek == pytest.approx(100_000_000.0)
+    assert p.price_source == "yahoo_scaled"
+    reg = mcap_at(h, shares, T("2019-01-02"), 45, register_price=21.0, register_price_source="register_onvenue")
+    assert reg.mcap_sek == pytest.approx(105_000_000.0) and reg.price_source == "register_onvenue" and reg.close_raw_yahoo == pytest.approx(20.0)
     after = mcap_at(h, shares, T("2019-02-15"), 45)
     assert after.shares == pytest.approx(10_000_000.0) and after.mcap_sek == pytest.approx(100_000_000.0)
     late = pd.Series([5_000_000.0], index=pd.DatetimeIndex([T("2018-12-20")]))

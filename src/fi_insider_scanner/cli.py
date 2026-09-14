@@ -120,6 +120,90 @@ def cmd_enrich(args: argparse.Namespace) -> None:
     print(stats)
 
 
+def cmd_gates_mcap(args: argparse.Namespace) -> None:
+    from .backtest import main as bt
+
+    bt.gates_mcap(config.load())
+    print("-> backtest/05_gates_mcap.md")
+
+
+def cmd_freeze(args: argparse.Namespace) -> None:
+    from .backtest import main as bt
+
+    bt.freeze(config.load())
+    print(f"config sha256 {config.config_sha256()} -> backtest/preregistration.md (da committare prima del backtest)")
+
+
+def cmd_backtest(args: argparse.Namespace) -> None:
+    from .backtest import main as bt
+
+    prereg = config.BACKTEST_DIR / "preregistration.md"
+    if not prereg.exists():
+        raise SystemExit("manca backtest/preregistration.md: eseguire `fi-scan freeze` e committare prima")
+    if config.config_sha256() not in prereg.read_text(encoding="utf-8"):
+        raise SystemExit("config/pipeline.toml è cambiato dopo la pre-registrazione: serve un nuovo ADR e un nuovo freeze")
+    print(bt.backtest(config.load()))
+
+
+def cmd_refresh(args: argparse.Namespace) -> None:
+    from .ingest.refresh import refresh
+
+    print(refresh(args.lookback))
+
+
+def cmd_caso_zero(args: argparse.Namespace) -> None:
+    import re
+
+    import pandas as pd
+
+    from . import pipeline, store
+    from .backtest import main as bt
+    from .backtest import run
+    from .backtest.events import build_b_events
+    from .canon.visibility import Register
+    from .dossier import build as dz
+    from .gates.openmarket import b_row
+    from .ingest.refresh import REFRESHED_DB
+
+    cfg = config.load()
+    cz = cfg["caso_zero"]
+    db = None if args.pinned or not REFRESHED_DB.exists() else REFRESHED_DB
+    note = "snapshot pinnato" if db is None else f"snapshot pinnato + refresh FI ({store.load_meta('refresh', db)['window']})"
+    env = bt.load_env(cfg, db)
+    df = pipeline.canonical_with_values() if db is None else pipeline.canonical_from(db)
+    rules = store.load_rules(db)
+    start = pd.Timestamp(cz["window_start"]) - pd.Timedelta(days=cfg["cluster"]["window_days"] + 5)
+    cand = df[b_row(df) & (df["trade_date"] >= start)]
+    keys = set(cand["issuer_key"])
+    reg = Register(df[df["issuer_key"].isin(keys)], rules)
+    print(f"{note}; emittenti con acquisti on-venue dal {start.date()}: {len(keys)}", flush=True)
+    b = build_b_events(reg, cfg, env.market)
+    b = run.attach_mcap(b, env, "anchor")
+    b["gate_ok"] = b["score"].eq(4) & ~b["is_stale"]
+    sel = dz.select_case(b, cfg)
+    config.DOSSIER_DIR.mkdir(exist_ok=True)
+    cols = ["issuer_name", "as_of", "anchor", "n_persons", "value_sek", "score", "is_stale", "symbol", "verified", "mcap_usd", "band", "dilution", "s3_in_window"]
+    ranked = sel.candidates[cols].copy()
+    ranked["mcap_usd"] = (ranked["mcap_usd"] / 1e6).round(0)
+    from .mdtable import md_table
+
+    header = "# Candidati caso zero" + chr(10) * 2 + "Regola: " + sel.rule + "." + chr(10) * 2 + "Fonte: " + note + "." + chr(10) * 2
+    (config.DOSSIER_DIR / f"{cz['window_end']}_candidati.md").write_text(header + md_table(ranked.astype({"as_of": str, "anchor": str})) + chr(10), encoding="utf-8")
+    if sel.case is None:
+        print("nessun candidato che passa i gate nella finestra")
+        return
+    case = sel.case
+    sym = case["symbol"]
+    shares_out = env.market.shares(sym)
+    shares_out = None if shares_out is None or shares_out.empty else float(shares_out[shares_out.index <= pd.Timestamp(case["as_of"]) - pd.Timedelta(days=cfg["dilution"]["shares_lag_days"])].iloc[-1]) if (shares_out[shares_out.index <= pd.Timestamp(case["as_of"]) - pd.Timedelta(days=cfg["dilution"]["shares_lag_days"])]).size else None
+    slug = re.sub(r"[^a-z0-9]+", "-", str(case["issuer_name"]).lower()).strip("-")[:40]
+    sources = dz.load_sources(config.DOSSIER_DIR / f"{slug}_sources.json")
+    md = dz.build_dossier(case, reg, cfg, shares_out, env.market.reports(sym), sources, sel.in_band, sel.rule, note)
+    out = config.DOSSIER_DIR / f"{cz['window_end']}_{slug}.md"
+    out.write_text(md, encoding="utf-8")
+    print(f"caso zero: {case['issuer_name']} T={case['as_of']} banda={case['band']} -> {out}")
+
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(prog="fi-scan")
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -138,6 +222,18 @@ def main(argv: list[str] | None = None) -> None:
     p.set_defaults(func=cmd_resolve)
     p = sub.add_parser("enrich", help="checkpoint 5: azioni e date report per i ticker risolti (lungo)")
     p.set_defaults(func=cmd_enrich)
+    p = sub.add_parser("gates-mcap", help="checkpoint 6: gate con dati di mercato e bande (nessun rendimento)")
+    p.set_defaults(func=cmd_gates_mcap)
+    p = sub.add_parser("freeze", help="checkpoint 6b: pre-registrazione (sha256 config + criteri)")
+    p.set_defaults(func=cmd_freeze)
+    p = sub.add_parser("backtest", help="checkpoint 7-10: rendimenti, control, survivorship, placebo, verdetto")
+    p.set_defaults(func=cmd_backtest)
+    p = sub.add_parser("refresh", help="caso zero: export incrementale FI (un thread, pausa 5 s, max 20 richieste)")
+    p.add_argument("--lookback", type=int, default=config.load()["caso_zero"]["refresh_lookback_days"])
+    p.set_defaults(func=cmd_refresh)
+    p = sub.add_parser("caso-zero", help="caso zero: selezione dichiarata e dossier")
+    p.add_argument("--pinned", action="store_true", help="usa lo snapshot pinnato invece del DB rinfrescato")
+    p.set_defaults(func=cmd_caso_zero)
     args = parser.parse_args(argv)
     args.func(args)
 

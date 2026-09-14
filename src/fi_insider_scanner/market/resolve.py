@@ -31,8 +31,11 @@ class Resolution:
     verified: bool | None
     n_checked: int
     share_in_range: float | None
+    share_in_range_recent: float | None
     median_ratio: float | None
     reason: str
+    adjusted_history: bool
+    scale_segments: str
     tried: str
     history_start: str | None
     history_end: str | None
@@ -91,8 +94,10 @@ def resolve_isin(isin: str, issuer_key: str, issuer_name: str, trades: pd.DataFr
 
     def done(found) -> Resolution:
         symbol, method, ver, hist = found
+        segs = ";".join(f"{sg.start.date()}..{sg.end.date()}:{sg.factor:.4f}:{sg.n}" for sg in ver.segments)
         return Resolution(isin, issuer_key, issuer_name, symbol, method, ver.verified, ver.n_checked, ver.share_in_range,
-                          ver.median_ratio, ver.reason, ";".join(tried), str(hist.index.min().date()), str(hist.index.max().date()))
+                          ver.share_in_range_recent, ver.median_ratio, ver.reason, ver.adjusted_history, segs, ";".join(tried),
+                          str(hist.index.min().date()), str(hist.index.max().date()))
 
     if isin in nasdaq_map:
         found = attempt(nasdaq_map[isin], "nasdaq_list")
@@ -114,7 +119,7 @@ def resolve_isin(isin: str, issuer_key: str, issuer_name: str, trades: pd.DataFr
     if best_none is not None:
         return done(best_none)
     reason = "NO_CANDIDATE" if not tried else "NOT_VERIFIED"
-    return Resolution(isin, issuer_key, issuer_name, None, None, False, 0, None, None, reason, ";".join(tried), None, None)
+    return Resolution(isin, issuer_key, issuer_name, None, None, False, 0, None, None, None, reason, False, "", ";".join(tried), None, None)
 
 
 def resolve_all(

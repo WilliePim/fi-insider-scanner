@@ -54,6 +54,20 @@ class Env:
 # --- market cap e bande ---------------------------------------------------------------------
 
 
+def register_price(env: Env, record_ids: str, isin) -> tuple[float | None, str | None]:
+    """Prezzo di esecuzione in SEK delle righe dell'evento sull'ISIN: mediana on-venue, altrimenti off-venue."""
+    rows = env.current[env.current["record_id"].isin(record_ids.split("|"))]
+    rows = rows[rows["currency"].eq("SEK") & (rows["price"].fillna(0) > 0)]
+    if isin is not None:
+        rows = rows[rows["isin"].eq(isin)]
+    on = rows[~rows["venue_class"].isin(["off_venue", "unknown"])]
+    if not on.empty:
+        return float(on["price"].median()), "register_onvenue"
+    if not rows.empty:
+        return float(rows["price"].median()), "register_offvenue"
+    return None, None
+
+
 def attach_mcap(events: pd.DataFrame, env: Env, date_col: str) -> pd.DataFrame:
     if events.empty:
         return events
@@ -61,9 +75,10 @@ def attach_mcap(events: pd.DataFrame, env: Env, date_col: str) -> pd.DataFrame:
     lag = cfg["dilution"]["shares_lag_days"]
     low, high, edge = cfg["band"]["low_usd"], cfg["band"]["high_usd"], cfg["band"]["edge_sensitivity"]
     rows = []
-    for issuer, isin, day in zip(events["issuer_key"], events["isin"], events[date_col]):
+    for issuer, isin, day, rids in zip(events["issuer_key"], events["isin"], events[date_col], events["record_ids"]):
         sym = env.market.symbol_for_isin(isin)
-        point = mcap_at(env.market.history(sym), env.market.shares(sym), day, lag) if sym else None
+        price, source = register_price(env, rids, isin)
+        point = mcap_at(env.market.history(sym), env.market.shares(sym), day, lag, price, source, env.market.segments(sym)) if sym else None
         rows.append(
             {
                 "symbol": sym,
@@ -73,7 +88,9 @@ def attach_mcap(events: pd.DataFrame, env: Env, date_col: str) -> pd.DataFrame:
                 "mcap_sek": point.mcap_sek if point else None,
                 "shares_used": point.shares if point else None,
                 "shares_date": point.shares_date if point else None,
-                "close_raw": point.close_raw if point else None,
+                "price_used": point.price_used if point else None,
+                "price_source": point.price_source if point else None,
+                "close_raw_yahoo": point.close_raw_yahoo if point else None,
             }
         )
     out = events.reset_index(drop=True).join(pd.DataFrame(rows))
@@ -147,7 +164,7 @@ class Pool:
         usd = asof_values(env.usdsek, dates)
         cols = {}
         for issuer, sym in self.symbols.items():
-            cols[issuer] = mcap_panel(env.market.history(sym), env.market.shares(sym), dates, lag) / usd
+            cols[issuer] = mcap_panel(env.market.history(sym), env.market.shares(sym), dates, lag, env.market.segments(sym)) / usd
         self.panel = pd.DataFrame(cols, index=dates)
         self.low, self.high = env.cfg["band"]["low_usd"], env.cfg["band"]["high_usd"]
 
@@ -273,17 +290,18 @@ def in_period(events: pd.DataFrame, cfg: dict) -> pd.DataFrame:
 
 
 def column_a(register: Register, env: Env) -> pd.DataFrame:
+    """Eventi A con gate e market cap. Nessun rendimento: quelli arrivano dopo la pre-registrazione."""
     a = in_period(build_a_events(register, env.cfg, env.market), env.cfg)
     a = attach_mcap(a, env, "last_trade")
     a["gate_ok"] = a["dilution"].ne("BLOCKED")
-    return attach_returns(a, env)
+    return a
 
 
 def column_b(register: Register, env: Env) -> pd.DataFrame:
     b = in_period(build_b_events(register, env.cfg, env.market), env.cfg)
     b = attach_mcap(b, env, "anchor")
     b["gate_ok"] = b["score"].eq(4) & ~b["is_stale"]
-    return attach_returns(b, env)
+    return b
 
 
 def placebo(primary: pd.DataFrame, env: Env, register: Register, quiet: QuietIndex) -> pd.DataFrame:
