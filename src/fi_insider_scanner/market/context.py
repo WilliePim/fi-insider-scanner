@@ -36,6 +36,13 @@ class YahooMarket:
     def is_verified(self, isin: str | None) -> bool | None:
         return self._verified_by_isin.get(isin)
 
+    def symbol_for_isin(self, isin: str | None) -> str | None:
+        """Solo il ticker dell'ISIN stesso (verificato o non verificabile): nessun ripiego su altre classi."""
+        return self._by_isin.get(isin) if isin is not None else None
+
+    def issuer_symbols(self) -> dict[str, str]:
+        return dict(self._by_issuer)
+
     @staticmethod
     @lru_cache(maxsize=None)
     def history(symbol: str) -> pd.DataFrame | None:

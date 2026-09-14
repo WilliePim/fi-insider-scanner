@@ -24,9 +24,10 @@ def stock_history(index, closes):
 
 
 def test_excess_return_and_entry_after_publication():
-    bench = bench_series(growth_from=22, step=1.04)
+    # ingresso alla sessione 0, uscita alla sessione 21: il salto deve cadere entro l'uscita
+    bench = bench_series(growth_from=21, step=1.04)
     closes = np.full(len(bench), 10.0)
-    closes[22:] = 11.0
+    closes[21:] = 11.0
     h = stock_history(bench.index, closes)
     event_day = bench.index[0] - pd.Timedelta(days=1)  # entrata alla sessione 0
     r = event_return(h, bench, event_day, 21, 5, 5.0)

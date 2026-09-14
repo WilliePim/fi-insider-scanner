@@ -18,6 +18,7 @@ from . import yf_cache
 from .prices import verify_against_register
 
 ON_VENUE_FOR_VERIFY = ("xsto", "fnse", "spotlight", "ngm", "mtf_si")
+NAME_SEARCH_MAX_CANDIDATES = 3
 
 
 @dataclass
@@ -104,28 +105,36 @@ def resolve_isin(isin: str, issuer_key: str, issuer_name: str, trades: pd.DataFr
             if found:
                 return done(found)
     if best_none is None:
-        for q in yf_cache.search_text(clean_name(issuer_name)):
-            sym = q.get("symbol")
-            if isinstance(sym, str) and sym.endswith(".ST"):
-                found = attempt(sym, "search_name")
-                if found:
-                    return done(found)
+        st_symbols = [q.get("symbol") for q in yf_cache.search_text(clean_name(issuer_name))]
+        st_symbols = [s for s in st_symbols if isinstance(s, str) and s.endswith(".ST")][:NAME_SEARCH_MAX_CANDIDATES]
+        for sym in st_symbols:
+            found = attempt(sym, "search_name")
+            if found:
+                return done(found)
     if best_none is not None:
         return done(best_none)
     reason = "NO_CANDIDATE" if not tried else "NOT_VERIFIED"
     return Resolution(isin, issuer_key, issuer_name, None, None, False, 0, None, None, reason, ";".join(tried), None, None)
 
 
-def resolve_all(df: pd.DataFrame, nasdaq: pd.DataFrame, rc: dict, done: pd.DataFrame | None = None, progress=None) -> pd.DataFrame:
+def resolve_all(
+    df: pd.DataFrame,
+    nasdaq: pd.DataFrame,
+    rc: dict,
+    done: pd.DataFrame | None = None,
+    progress=None,
+    shard: int | None = None,
+    nshards: int = 1,
+) -> pd.DataFrame:
     universe = share_isin_universe(df)
     trades = verification_trades(df)
     by_isin = {k: g for k, g in trades.groupby("isin")}
     nasdaq_map = dict(zip(nasdaq["isin"], nasdaq["yahoo"])) if not nasdaq.empty else {}
     already = set(done["isin"]) if done is not None and not done.empty else set()
-    out = [] if done is None else done.to_dict("records")
+    out = [] if done is None else done.drop_duplicates("isin").to_dict("records")
     empty = trades.iloc[:0]
     for i, row in enumerate(universe.itertuples(index=False)):
-        if row.isin in already:
+        if row.isin in already or (shard is not None and i % nshards != shard):
             continue
         res = resolve_isin(row.isin, row.issuer_key, row.issuer_name, by_isin.get(row.isin, empty), nasdaq_map, rc)
         out.append(asdict(res))

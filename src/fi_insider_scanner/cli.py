@@ -81,24 +81,43 @@ def cmd_resolve(args: argparse.Namespace) -> None:
 
     cfg = config.load()
     df = store.load_frame("transactions")
-    try:
-        done = store.load_frame("resolution_partial")
-    except Exception:  # noqa: BLE001 - tabella assente al primo avvio
-        done = None
-    collected = [] if done is None else done.to_dict("records")
+    partial_tables = ["resolution_partial"] + [f"resolution_partial_{k}" for k in range(8)]
+    frames = []
+    for name in partial_tables:
+        try:
+            frames.append(store.load_frame(name))
+        except Exception:  # noqa: BLE001 - tabella assente
+            pass
+    done = pd.concat(frames, ignore_index=True).drop_duplicates("isin") if frames else None
+    table = "resolution_partial" if args.shard is None else f"resolution_partial_{args.shard}"
+    collected: list[dict] = []
 
     def progress(i, n, res):
         collected.append(asdict(res))
-        if len(collected) % 100 == 0:
-            store.save_frame("resolution_partial", pd.DataFrame(collected))
+        if len(collected) % 50 == 0:
+            store.save_frame(table, pd.DataFrame(collected))
             ok = sum(1 for r in collected if r["verified"] is True)
-            print(f"{i}/{n} ISIN, verificati {ok}/{len(collected)}", flush=True)
+            print(f"{i}/{n} ISIN, verificati {ok}/{len(collected)} (shard {args.shard})", flush=True)
 
-    result = resolve.resolve_all(df, nasdaq.listings(), cfg["resolver"], done=done, progress=progress)
-    store.save_frame("resolution_partial", pd.DataFrame(collected))
+    result = resolve.resolve_all(df, nasdaq.listings(), cfg["resolver"], done=done, progress=progress,
+                                 shard=args.shard, nshards=args.nshards)
+    if collected:
+        store.save_frame(table, pd.DataFrame(collected))
+    if args.shard is not None:
+        print(f"shard {args.shard} completato: {len(collected)} ISIN nuovi")
+        return
     store.save_frame("resolution", result)
     result.to_csv(config.CACHE_DIR / "resolution.csv", index=False)
     print(f"ISIN {len(result):,}: verified True {int((result['verified'] == True).sum()):,}, None {int(result['verified'].isna().sum()):,}")  # noqa: E712
+
+
+def cmd_enrich(args: argparse.Namespace) -> None:
+    from . import store
+    from .market import enrich
+
+    symbols = enrich.usable_symbols(store.load_frame("resolution"))
+    stats = enrich.enrich(symbols, progress=lambda i, s: print(f"{i}/{len(symbols)} {s}", flush=True))
+    print(stats)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -114,7 +133,11 @@ def main(argv: list[str] | None = None) -> None:
     p = sub.add_parser("events-dryrun", help="checkpoint 3: eventi A e trigger B senza prezzi")
     p.set_defaults(func=cmd_events_dryrun)
     p = sub.add_parser("resolve", help="checkpoint 4: ISIN -> ticker .ST verificato (lungo, riprende da cache)")
+    p.add_argument("--shard", type=int, default=None, help="indice shard (senza: unisce e completa)")
+    p.add_argument("--nshards", type=int, default=1)
     p.set_defaults(func=cmd_resolve)
+    p = sub.add_parser("enrich", help="checkpoint 5: azioni e date report per i ticker risolti (lungo)")
+    p.set_defaults(func=cmd_enrich)
     args = parser.parse_args(argv)
     args.func(args)
 
