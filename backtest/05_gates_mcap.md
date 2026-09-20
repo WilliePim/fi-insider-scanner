@@ -1,6 +1,6 @@
 # 05 — Gate con dati di mercato e market cap
 
-Generato 2026-09-14T16:56:09+00:00. Nessun rendimento successivo agli eventi calcolato.
+Generato 2026-09-20T13:20:13+00:00. Nessun rendimento successivo agli eventi calcolato.
 
 ## Colonna A
 

@@ -1,6 +1,6 @@
 # 12 — Matched control
 
-Generato 2026-09-14T17:09:16+00:00. Peer: stessa banda alla stessa data, nessuna riga B_row visibile nei 60 giorni prima, log-cap più vicino.
+Generato 2026-09-20T13:26:22+00:00. Peer: stessa banda alla stessa data, nessuna riga B_row visibile nei 60 giorni prima, log-cap più vicino.
 
 ## Esito della selezione del peer nella cella P
 

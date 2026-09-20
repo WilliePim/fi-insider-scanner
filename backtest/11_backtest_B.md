@@ -1,6 +1,6 @@
 # 11 — Backtest colonna B (cluster Layer 1, versione del prompt)
 
-Generato 2026-09-14T17:08:59+00:00. Descrittivo: il verdetto dipende solo dalla colonna A.
+Generato 2026-09-20T13:26:13+00:00. Descrittivo: il verdetto dipende solo dalla colonna A.
 
 ## Imbuto
 

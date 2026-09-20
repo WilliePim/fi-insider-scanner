@@ -1,6 +1,6 @@
 # 10 — Backtest colonna A (analogo del test USA)
 
-Generato 2026-09-14T17:08:58+00:00. Pre-registrazione: `backtest/preregistration.md`.
+Generato 2026-09-20T13:26:11+00:00. Pre-registrazione: `backtest/preregistration.md`.
 
 ## Imbuto verso la cella primaria P
 

@@ -1,6 +1,6 @@
 # 13 — Survivorship
 
-Generato 2026-09-14T17:09:16+00:00.
+Generato 2026-09-20T13:26:22+00:00.
 
 ## Stato del rendimento per anno (A variante b, tutte le bande)
 
@@ -33,7 +33,7 @@ Generato 2026-09-14T17:09:16+00:00.
 | 2024 | 138 | 32 |
 | 2025 | 105 | 25 |
 
-Non risolti: **2,126**; attesi in banda 50-300M: **509**; con indizio di acquisizione (vendite fuori mercato allo stesso prezzo prima dell'ultima riga): 377. r̄_OMXSPI sugli eventi osservati: +4.11%.
+Non risolti: **2,126** su 5,211 eventi (41%); attesi in banda 50-300M: **509**; con indizio di acquisizione (vendite fuori mercato allo stesso prezzo prima dell'ultima riga): 377. r̄_OMXSPI sugli eventi osservati: +4.11%.
 
 
 Break-even p* (quota dei non risolti a −100% che azzera la media di P): sugli attesi in banda —, su tutti —.

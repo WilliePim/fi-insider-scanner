@@ -1,6 +1,6 @@
 # 20 — Verdetto pre-registrato
 
-Generato 2026-09-14T17:09:16+00:00. Criteri: `backtest/preregistration.md`. Nessuna interpretazione oltre i criteri.
+Generato 2026-09-20T13:26:22+00:00. Criteri: `backtest/preregistration.md`. Nessuna interpretazione oltre i criteri.
 
 ## Esito: **NON REGGE**
 
@@ -36,28 +36,36 @@ Media di P con scenario S0 sugli attesi in banda: -1.48%. Copertura: 68.3%.
 Scanner USA su Form 4, stessa definizione: +3,50% (t = 4,30, iid) a 126 giorni in banda $50-300M vs IWM; matched control +2,41% (t = 2,02).
 
 
-
 ## Letture descrittive (non entrano nel verdetto)
 
-- Il placebo (stessi emittenti, date spostate di -252 sessioni) contro il peer vale +4,54% (t 2,3; n 636): il confronto con il peer non e' neutro. Gli emittenti che un anno dopo avranno acquisti insider battevano gia' i pari dimensione. C = -0,58% va letto contro quel baseline positivo, non contro zero: in nessuna lettura favorisce l'ipotesi.
-- Scomposizione per anno: l'eccesso contro l'indice e' quasi tutto effetto dimensione (peer vs indice +14% nel 2016-18 e +21% nel 2020, -6/-12% nel 2022-25). Il numero USA, misurato contro un indice, era esposto allo stesso confondimento.
-- Closed period (colonna A, banda, 126s): acquisti entro 10 giorni dal report -6,35% (n 153, t CR1 -3,0); oltre 10 giorni +2,49% (n 277, t 0,9); data ignota 387. La direzione e' quella ipotizzata nel prompt (gli acquisti fuori dalla finestra post-report sono diversi), ma non e' significativa, e' una cella descrittiva tra molte e la data report e' nota solo per il 53% degli eventi.
-- Bande: <50M vs peer +4,17% (t 1,4); >300M vs peer +0,23% (t 0,3). Nessuna banda regge il t = 2 contro il peer.
-- Colonna B (cluster 4/4, banda): -1,22% (n 238, t -0,5, MDE 7,1%): sottodimensionata per rilevare +3,5%, come previsto al checkpoint 3.
-- Sensibilita' della P: tutte tra -1,75% (Adj Close) e -3,39% (netto 100bp); nessuna cambia segno.
+- Il placebo (stessi emittenti, date spostate di −252 sessioni) contro il peer vale +4.54% (t iid 2.31, n 636): il confronto con il peer non è neutro. Gli emittenti che un anno dopo avranno acquisti insider battevano già i pari dimensione, quindi -0.58% va letto contro quel baseline positivo, non contro zero.
+- Scomposizione per anno (report 12): l'eccesso contro l'indice segue il rendimento dei peer contro l'indice, cioè l'effetto dimensione. Il numero USA, misurato contro IWM, era esposto allo stesso confondimento.
+- Closed period: acquisti entro 10 giorni dal report -6.35% (n 153, t CR1 -3.01); oltre 10 giorni +2.49% (n 277, t 0.87). La direzione è quella ipotizzata, ma la media sta sotto la propria MDE, la differenza fra i due sottoinsiemi non è testata e la data report è nota solo per il 52% degli eventi della cella P.
+- Bande: A (b) lt50 vs peer +4.17% (t 1.38); B (b) lt50 vs peer +5.76% (t 1.18); A (b) 50_300 vs peer -0.58% (t -0.33); B (b) 50_300 vs peer -0.62% (t -0.18); A (b) gt300 vs peer +0.23% (t 0.29); B (b) gt300 vs peer -1.94% (t -1.48).
+- Colonna B (cluster 4/4, banda): B primaria: 4/4 non stale (b) 50-300M -1.22% (n 238, MDE 7.06%).
+- Sensibilità della cella P: tutte fra -3.39% e -1.75%; nessuna cambia segno.
+- Il dilution veto resta UNKNOWN per il 39% degli eventi A (nessuna serie azioni alla data).
 
 ## Survivorship
 
-- 2.126 eventi A (b) su 5.683 (37%) non hanno banda perche' l'emittente non ha una serie Yahoo verificata o un conteggio azioni alla data; 509 di questi sarebbero attesi in banda. Con lo scenario S0 la media resta -1,48%; con S_plus (+15%, uscita per acquisizione) diventerebbe +4,28%: il segno della P dipende dall'ipotesi sugli eventi mancanti solo nello scenario piu' favorevole. Il break-even p* non e' definito perche' la media osservata e' negativa.
+- 2,126 eventi A (b) su 5,211 (41%) non hanno banda perché l'emittente non ha una serie Yahoo verificata o un conteggio azioni alla data; 509 di questi sarebbero attesi in banda. Con lo scenario S0 la media di P resta -1.48%. Il break-even p* non è definito perché la media osservata è negativa.
 
-## Cosa non e' stato possibile fare, e perche'
 
-1. Tenere i delistati "con l'ultimo prezzo disponibile": Yahoo non ha le serie degli emittenti spariti (report 03: 2,4% verificati tra chi ha smesso di comparire nel 2016, 63% nel 2026). Sostituito da copertura per anno e scenari.
-2. Un benchmark small cap o total return: su yfinance esistono solo `^OMXSPI` (price index) e nessun indice small/gross con storico. Sostituito dal peer della stessa banda (colonna C), che il placebo mostra non neutro.
-3. Il flag closed period per tutti gli eventi: le date report Yahoo mancano o sono vecchie per molte small cap (ADR-043); nota solo per il 53% della P.
-4. Un dilution veto simmetrico a quello USA: niente prospetti SEC; l'attivita' di emissione si vede solo dal registro (sottoscrizioni dei PDMR) e dalla crescita delle azioni Yahoo, UNKNOWN per il 39% degli eventi A.
-5. Il test di invarianza per troncamento su 200 eventi (piano, `tests/snapshot/`): non implementato per tempo. Le garanzie point-in-time restano quelle dei test unitari (`Register.visible`, `test_clusters`, `test_gates`) e del test AST che vieta `expost_` e l'accesso diretto agli status nei moduli che decidono.
-6. La correzione per il cambio di soglia FI (EUR 5.000 -> 20.000 dal 2024-12-04, ADR-040): non applicata; le tabelle per anno la rendono visibile.
-7. Nel caso zero: tabella dei maggiori azionisti (pagina resa via JavaScript), retribuzioni, prospetto dell'emissione 2025 e lock-up non letti; le date del possesso degli insider sul sito non sono indicate.
-8. Righe identiche reali perse dalla dedup upstream prima del 2026-08-16: non recuperabili dal bulk (ADR-002).
-9. Nessun modello linguistico usato in nessun passo: token e costo per run = 0.
+## Cosa non è stato possibile fare, e perché
+
+1. Tenere i delistati "con l'ultimo prezzo disponibile": Yahoo non ha le serie degli emittenti spariti (report 03:
+   2,4% di ticker verificati tra chi ha smesso di comparire nel 2016, 69,5% tra chi è ancora attivo nel 2026).
+   Sostituito da copertura per anno, scenari e break-even.
+2. Un benchmark small cap o total return: su yfinance esistono solo `^OMXSPI` (price index) e nessun indice
+   small/gross con storico. Sostituito dal peer della stessa banda (colonna C), che il placebo mostra non neutro.
+3. Il flag closed period per tutti gli eventi: le date report Yahoo mancano o sono vecchie per molte small cap (ADR-043).
+4. Un dilution veto simmetrico a quello USA: niente prospetti, l'attività di emissione si vede solo dal registro e
+   dalla crescita delle azioni Yahoo.
+5. Il test di invarianza per troncamento su 200 eventi previsto dal piano: non implementato. Le garanzie point-in-time
+   restano nei test unitari di `Register.visible`, cluster e gate, e nel test AST che vieta `expost_` e la lettura
+   diretta degli status nei moduli che decidono.
+6. La correzione per il cambio di soglia FI (EUR 5.000 → 20.000 dal 2024-12-04, ADR-040): non applicata; le tabelle
+   per anno la rendono visibile.
+7. Righe identiche reali perse dalla dedup upstream prima del 2026-08-16: non recuperabili dal bulk (ADR-002).
+8. Nessun modello linguistico è stato usato in nessun passo: token e costo per run = 0.
+
