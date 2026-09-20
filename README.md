@@ -11,6 +11,10 @@ The answer, on 817 events: **−2.39%** against the index (t = −1.96 clustered
 against a size-matched peer (t = −0.33). The pre-registered rule reads that as **NON REGGE** — it does not
 replicate. A placebo run shows the peer comparison is not even neutral, which is part of the finding.
 
+**Status: work in progress.** The pre-registered test is finished and its numbers are frozen — they will
+not be re-fitted. The repository around it is still being built: coverage of delisted issuers, a wider
+event window and a few checks listed under [Status and open work](#status-and-open-work) are open.
+
 ```
 uv sync && uv run pytest     # 226 offline tests
 uv run fi-scan profile       # pinned snapshot -> report backtest/00_ingest_profile.md
@@ -43,6 +47,19 @@ trusted and audited:
 Language note: code, tests and this README are in English. The analysis output — the reports under
 `backtest/`, the ADRs, the case dossier — is in Italian, the language it was written and reasoned in.
 Table headers and verdict labels are Italian for the same reason.
+
+### Where to look first
+
+| if you have | read |
+|---|---|
+| 5 minutes | [`backtest/20_verdict.md`](backtest/20_verdict.md) — the pre-registered criteria, the numbers they were applied to, and nothing else |
+| 15 minutes | this page, then [`backtest/preregistration.md`](backtest/preregistration.md) (written before the first return) and [`DECISIONS.md`](DECISIONS.md) ADR-035 |
+| 30 minutes | [`visibility.py`](src/fi_insider_scanner/canon/visibility.py) for the point-in-time contract, [`clusters.py`](src/fi_insider_scanner/gates/clusters.py) for a gate, [`run.py`](src/fi_insider_scanner/backtest/run.py) for the measurement, [`test_guards.py`](tests/test_guards.py) for what the build refuses |
+| an afternoon | the reports in order, 00 to 20: they are the laboratory notebook, including the parts that did not work |
+
+Everything is reproducible from the pinned snapshot: one upstream commit, one configuration hash, one
+bootstrap seed. Network steps cache to disk, so a second run of the whole pipeline is offline and gives
+the same numbers to the byte.
 
 ---
 
@@ -182,7 +199,8 @@ uv run fi-scan refresh        # polite FI incremental export (case zero only)
 uv run fi-scan case-zero      # candidate list and dossier
 ```
 
-Network steps cache every response to disk, so a second run is offline and reproducible.
+The network steps are resumable and write through to the cache, so an interrupted `resolve` or `enrich`
+picks up where it stopped.
 
 ## Performance
 
@@ -216,9 +234,40 @@ module; no recommendation vocabulary in a generated dossier), **equivalence** (t
 against the naive one), and **point-in-time** (a gate fed the full history with an `as_of` must agree with
 the same gate fed only the data up to `as_of`).
 
+## Status and open work
+
+Done, and frozen: ingest and canonical schema, Layer-1 gates, the pre-registered backtest with its matched
+control, survivorship bounds and placebo, the verdict, and one case dossier. The primary cell will not be
+re-estimated — a new question means a new pre-registration, not a new fit of this one.
+
+Open, in the order I intend to take them:
+
+1. **Delisted coverage.** 41% of column-A events have no usable price series, because Yahoo drops issuers
+   that disappear. Today this is handled with bounds (scenarios and a break-even share); a delisting list
+   with last prices would turn the bounds into measurements. This is the single change that could most
+   affect the reading of the result.
+2. **The truncation-invariance test** planned at design time and not yet written: replay 200 random events
+   against a register physically cut at `as_of` and assert the gates agree with the point-in-time path.
+   The guarantee is currently carried by unit tests and the AST guard, which is weaker.
+3. **Statistical power for column B.** 238 events in band against roughly 1,350 needed for +3.5%. Either a
+   longer window as the register grows, or the same pipeline pointed at Oslo and Helsinki, which publish
+   comparable MAR art. 19 registers.
+4. **A total-return benchmark.** `^OMXSPI` is a price index; the `Adj Close` variant is reported as an
+   upper bound rather than a correction.
+5. **The 2024 notification threshold** (EUR 5,000 to 20,000, ADR-040) is visible in the per-year tables but
+   not corrected for.
+6. **Operational use of the polite FI client** — a weekly refresh that lists new clusters — is written and
+   run by hand; it is not scheduled.
+
+No language model is used anywhere in the pipeline: token cost per run is zero, and every number comes
+from deterministic code over public data.
+
 ## License and data
 
 Code: [MIT](LICENSE). Register data: CC0, from the upstream mirror; no upstream code is copied or executed.
 Market data comes from Yahoo Finance through `yfinance` and is cached locally for reproducibility, not
 redistributed. This repository produces measurements and a dossier: no orders, no recommendations, and the
 verdict is about one number replicating, nothing else.
+
+Author: Simone Datola. Corrections, and arguments against the reading of the result, are welcome as issues —
+a negative result is only useful if it can be attacked.
