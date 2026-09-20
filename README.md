@@ -1,125 +1,224 @@
 # fi-insider-scanner
 
-Registro insider svedese (FI Insynsregistret, MAR art. 19): ingest canonico, gate Layer 1, backtest
-event-time su Stoccolma 2016-2025, dossier WHO / WHERE / WHEN per un caso reale.
+**Does an American insider-trading anomaly survive on the Swedish register? Pre-registered answer: no.**
 
-Repo autonomo: nessun import né path condiviso con altri progetti (test AST in `tests/test_guards.py`).
-Nessun ordine, nessuna raccomandazione: il verdetto del backtest è pre-registrato e riguarda solo la
-replica di un numero; il dossier non contiene giudizi.
+A US Form 4 scanner had produced one result that survived scrutiny: **+3.50% over 126 trading days for
+insider purchases in the $50-300M market-cap band (t = 4.30)**. This repository rebuilds that test on
+Finansinspektionen's PDMR register (MAR art. 19), Stockholm 2016-2025, with the criteria written down and
+committed *before* any forward return was computed.
 
-## Domanda
+The answer, on 817 events: **−2.39%** against the index (t = −1.96 clustered by issuer) and **−0.58%**
+against a size-matched peer (t = −0.33). The pre-registered rule reads that as **NON REGGE** — it does not
+replicate. A placebo run shows the peer comparison is not even neutral, which is part of the finding.
 
-Lo scanner USA su Form 4 aveva un solo numero sopravvissuto allo scrutinio: **+3,50% a 126 giorni di
-borsa nella banda di market cap $50-300M (t = 4,30)**. Quel numero non era un test "cluster": era
-"ogni acquisto open market ≥ $25.000, non bloccato dal dilution veto, uno per emittente ogni 126
-giorni, eccesso iid contro IWM". Il suo matched control lo aveva già ridotto a +2,41% (t = 2,02).
-Qui si replica la stessa definizione sulla Svezia (**colonna A**, primaria), si misura la versione
-cluster del metodo (**colonna B**) e si affianca a entrambe un peer della stessa dimensione
-(**colonna C**). Se non regge, è un risultato.
+```
+uv sync && uv run pytest     # 226 offline tests
+uv run fi-scan profile       # pinned snapshot -> report backtest/00_ingest_profile.md
+```
 
-## Dove leggere i risultati
+---
 
-| file | contenuto |
-|---|---|
-| `backtest/preregistration.md` | cella primaria, criteri di verdetto, sha256 della configurazione, **scritti prima dei rendimenti** |
-| `backtest/20_verdict.md` | verdetto (REGGE / NON REGGE / INCONCLUSIVO) applicando solo i criteri pre-registrati |
-| `backtest/10_backtest_A.md` | colonna A: imbuto, cella primaria, per anno, sensibilità, closed period, tutte le celle |
-| `backtest/11_backtest_B.md` | colonna B (cluster Layer 1): stesse tabelle |
-| `backtest/12_matched_control.md` | colonna C, scomposizione per anno, placebo |
-| `backtest/13_survivorship.md` | copertura per anno, scenari per gli eventi non risolti, break-even |
-| `backtest/00_…05_*.md` | checkpoint intermedi: profilo dello snapshot, tabella canonica, dry-run eventi, risoluzione ticker, gate e bande |
-| `dossier/` | caso zero: candidati e dossier |
-| `DECISIONS.md` | 42 ADR: ogni scelta non ovvia, con alternative, conseguenze e test |
+## Why this repository might interest you
 
-## Fonte dati e header reale
+It is a complete research pipeline for a question with a negative answer, built so that the answer can be
+trusted and audited:
 
-Bulk: `civictechsweden/oppna-insynsregistret`, `data/insynsregistret.csv` (dati CC0), **pinnato al commit
-`27d8523376`** (sha256 `462fbf2c…`, 42,6 MB, 166.210 righe, pubblicazioni 2016-07-04 → 2026-09-13).
-UTF-8, `;`, virgola decimale, `YYYY-MM-DD HH:MM:SS`. Nessun ID notifica. 9 record rotti in quarantena.
+- **Pre-registration.** The primary cell, the verdict rule and the sha256 of the configuration are written
+  to [`backtest/preregistration.md`](backtest/preregistration.md) and committed before the first forward
+  return exists. `fi-scan backtest` refuses to run if the configuration changed since.
+  ([`prereg.py`](src/fi_insider_scanner/backtest/prereg.py), [`verdict.py`](src/fi_insider_scanner/backtest/verdict.py))
+- **One read path, enforced.** Gates, events and controls may only see the register through
+  `Register.visible(as_of)`. An AST test fails the build if a decision module mentions a column computed
+  with future information (`expost_*`) or reads the row statuses directly.
+  ([`visibility.py`](src/fi_insider_scanner/canon/visibility.py), [`test_guards.py`](tests/test_guards.py))
+- **Data forensics over trust.** The register has no notification id, so revision chains are inferred and
+  scored. Yahoo silently rescales Swedish price history around rights issues, so every ticker is verified
+  against the register's own execution prices before it is used.
+  ([ADR-014](DECISIONS.md), [ADR-042](DECISIONS.md))
+- **Every judgement call is an ADR.** 45 of them in [`DECISIONS.md`](DECISIONS.md), each with context,
+  decision, alternatives rejected, consequences, and the test that enforces it.
+- **The reports are the product.** Every cell prints n, mean, median, four t statistics, a bootstrap CI and
+  the minimum detectable effect, and is flagged when `n < 30`, `|t| < 2` or the mean sits under its MDE.
 
-| # | header FI | canonico | note |
+Language note: code, tests and this README are in English. The analysis output — the reports under
+`backtest/`, the ADRs, the case dossier — is in Italian, the language it was written and reasoned in.
+Table headers and verdict labels are Italian for the same reason.
+
+---
+
+## The result
+
+Snapshot `27d8523376`, configuration `b67e29d7…`, primary horizon 126 trading sessions, one event per
+issuer per 126 calendar days, gross excess return.
+
+| cell | n | mean | median | t iid | t CR1 issuer | 95% CI | MDE |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| **P — column A, $50-300M, vs OMXSPI** | 817 | **−2.39%** | −4.75% | −1.83 | −1.96 | [−5.00%, +0.12%] | 3.66% |
+| C — same events vs size-matched peer | 817 | −0.58% | 0.00% | −0.33 | −0.34 | [−3.80%, +2.54%] | 4.90% |
+| A, <$50M vs index / vs peer | 509 | +1.66% / +4.17% | | 0.85 / 1.38 | | | |
+| A, >$300M vs index / vs peer | 1,892 | −0.05% / +0.23% | | −0.09 / 0.29 | | | |
+| B — cluster gate 4/4, $50-300M | 238 | −1.22% | −3.93% | −0.48 | −0.46 | [−5.70%, +3.80%] | 7.06% |
+| Placebo — same issuers, dates −252 sessions, vs peer | 636 | **+4.54%** | +4.88% | **2.31** | 2.23 | [+0.29%, +8.43%] | 5.49% |
+
+Three things the table says, in order of importance:
+
+1. **The US number does not reproduce.** Not in the band, not out of it, not at 21 or 63 sessions, not in
+   any of the 16 sensitivity variants (all between −1.75% and −3.39%, none changing sign).
+2. **Most of what looks like an insider effect against an index is a size effect.** Year by year, the
+   excess against OMXSPI tracks the peers' own excess against OMXSPI: +21% in 2020, −12% in 2025
+   ([report 12](backtest/12_matched_control.md)). The US result, also measured against an index, was
+   exposed to the same confound — its own matched control had already cut it to +2.41%.
+3. **The peer comparison is not neutral either.** Shifting the same events back one year gives +4.54%
+   against the peer (t = 2.31). Issuers that will see insider buying a year later were already beating
+   their size peers, so C = −0.58% should be read against a positive baseline, not against zero. A
+   pipeline that only reported the primary cell would have hidden this.
+
+Honest limits, in the same breath: coverage is 68.3% of events (Yahoo has no series for most delisted
+issuers), the column-B cluster test needs ~1,350 events to detect +3.5% and has 238, and the survivorship
+scenarios are bounds, not measurements. All of it is in [report 20](backtest/20_verdict.md).
+
+---
+
+## Method in one screen
+
+Three columns come out of one pipeline:
+
+| column | event | gate | role |
 |---|---|---|---|
-| 0 | Publiceringsdatum | `published_at` | della versione, non della notifica |
-| 1 | Emittent | `issuer_name_raw` → `issuer_key` | chiave = LEI; backfill via ISIN/nome; altrimenti nome |
-| 2 | LEI-kod | `issuer_lei` | vuoto nel 63% del 2016, 0% dal 2019 |
-| 3 | Anmälningsskyldig | `notifier_name` → `associate_kind` | self / vehicle / family |
-| 4 | Person i ledande ställning | `pdmr_name` → `name_key` / `person_key` | persona fisica; 3,4% degli acquisti ha nome societario |
-| 5 | Befattning | `role_raw` → `roles` | testo libero fino a ~2020, lista fissa di 9 valori dal 2023 |
-| 6 | Närstående | `is_closely_associated` | 44.199 Ja |
-| 7 | Korrigering | `is_amendment` | ⟺ `Är förstagångsrapportering` vuoto (0 violazioni) |
-| 8 | Beskrivning av korrigering | `amendment_note` | |
-| 9 | Är förstagångsrapportering | `is_initial` | |
-| 10 | Är kopplad till aktieprogram | `is_share_program` | 20.642 Ja |
-| 11 | Karaktär | `nature_raw` → `txn_kind` | 41 valori; solo `Förvärv` può essere segnale |
-| 12 | Instrumenttyp | `instrument_type_raw` → `instrument_type` + `type_source` | vuoto per tutto il 2016-17: inferito via ISIN / nome |
-| 13 | Instrumentnamn | `instrument_name` → `share_class` | `ser. B`, `serie B`, `… B`, pref, SDB |
-| 14 | ISIN | `isin` (+ check digit) | vuoto 14.036 |
-| 15 | Transaktionsdatum | `trade_date` | |
-| 16 | Volym | `volume` | |
-| 17 | Volymsenhet | `volume_unit` | Antal / Belopp |
-| 18 | Pris | `price` | valuta nativa conservata |
-| 19 | Valuta | `currency` | SEK 95%, poi CAD, EUR, USD |
-| 20 | Handelsplats | `venue_raw` → `venue_class` | nome, non MIC; `Utanför handelsplats` 37% |
-| 21 | Status | `status_raw` → `chain_status` | Aktuell / Reviderad / Makulerad; catene inferite (nessun ID) |
+| **A** | (issuer, publication day) with at least one open-market purchase ≥ $25,000 | dilution veto ≠ BLOCKED | exact analogue of the US test — decides the verdict |
+| **B** | first publication instant at which ≥ 3 distinct natural persons have bought within 30 days | Layer-1 score 4/4, not stale | the cluster method the brief asked for |
+| **C** | same events as A or B | — | peer of the same size band, quiet for 60 days: separates the insider effect from the size effect |
 
-Dettagli e distribuzioni: `backtest/00_ingest_profile.md`, `backtest/01_canonical.md`.
+Entry is the first session strictly after the publication day — never a price from before the market could
+read the filing. Exit is 126 sessions later. Excess is price return minus `^OMXSPI` price return, both in
+SEK; `Adj Close` is reported as an upper bound because no total-return Swedish index has history on Yahoo.
 
-## Idee riprese dallo scanner USA (reimplementate, mai importate)
+**Layer-1 gates** (column B): cluster of ≥ 3 natural persons in 30 days · not routine (≥ 6 months with
+purchases and stable monthly amounts means a plan, not an opinion) · dilution veto (subscriptions visible
+in the register, or share count up ≥ 25%) · no large holder. A structural subscription — three or more
+people buying at an identical price on the same day with issue evidence — forces the score to zero.
 
-| idea USA (file di riferimento nel repo `form4-scanner`) | qui |
-|---|---|
-| `open_market_buys`: P, non derivato, non piano, ≥ $25k (`form4_scanner/parse.py`) | Förvärv + azione + non programma + prezzo > 0 + Antal + ≥ $25k per riga al cambio della data |
-| dedup `(accession, txn_index)` (`cluster.py`) | `record_id` = sha256 dei 22 campi + occorrenza; catene di revisione inferite |
-| buyer groups via union-find, token entità (`cluster.py`, `flags.py`) | la persona fisica è già nel registro; veicoli attribuiti; nomi societari esclusi |
-| finestra 30 giorni, buyer distinti (`cluster.py`) | ≥ 3 persone fisiche, trigger alla pubblicazione, staleness, cooldown episodi |
-| prezzo di esecuzione uniforme = allocazione (`cluster.py`) | regole strutturali S1-S3 (sottoscrizione, strumenti di emissione, stesso prezzo + evidenza) |
-| dilution veto point-in-time (`dilution.py`, `tools/backfill_dilution.py`) | Teckning/BTA/BTU visibili nel registro + crescita azioni con lag di pubblicazione |
-| classificatore CMP routine (`classify.py`, con il bug "solo primo owner") | etichetta per ogni persona; il gate usa mesi con acquisti + dispersione degli importi |
-| backtest event-time: ingresso dopo la pubblicazione, ±500%, variante (b), t iid (`tools/backtest_event_time.py`) | stesso schema + t con cluster per emittente e mese, calendar-time, bootstrap, MDE |
-| matched control stessa banda, stessa data, quiet 60 gg (`tools/matched_control.py`) | colonna C su popolazione identica |
-| UNKNOWN scritto, sezione NON VERIFICATO (`reports/dossier_spec.md`) | dossier con MISSINGNESS obbligatoria e test di vocabolario |
-| lezioni: prezzo aggiustato × azioni as-filed è sbagliato; −100% non è conservativo; la copertura prezzi cambia per anno (`docs/HANDOFF.md`, `reports/survivorship_bound.md`) | mcap con prezzo del registro e azioni as-reported; scenari e break-even; copertura per anno |
+Two gates deserve their asymmetry: MAR does not cover holders above 10%, so `large_holder` is `true` or
+`unknown` and never `false`; and the MAR closed period makes post-report buying structural in Europe, so
+that flag is an attribute, never a score component.
 
-## Come si esegue
+---
+
+## The data, and what it took to make it usable
+
+Source: [`civictechsweden/oppna-insynsregistret`](https://github.com/civictechsweden/oppna-insynsregistret),
+the FI register as open data (CC0), pinned to commit `27d8523376`: 166,210 rows, 22 columns, publications
+from 2016-07-04 to 2026-09-13. Never `main` — a pinned commit, with its sha256 checked on load.
+
+| FI column | canonical | what it took |
+|---|---|---|
+| `Publiceringsdatum` | `published_at` | timestamp of the *version*, not of the notification |
+| `Emittent`, `LEI-kod` | `issuer_key` | LEI missing for 63% of 2016 rows; backfilled through ISIN, then through the normalised name |
+| `Anmälningsskyldig` | `notifier_name`, `associate_kind` | 34,387 rows filed by vehicles, 7,183 by family members — attributed to the PDMR, never counted as extra people |
+| `Person i ledande ställning` | `person_key` | conservative middle-name merges, point-in-time; 6,501 rows carry a company name and are excluded from person counts |
+| `Befattning` | `roles` | free text until ~2020 (3,863 distinct values), a fixed list of 9 from 2023 |
+| `Karaktär` | `txn_kind` | 41 values mapped; only `Förvärv` can ever be a signal; an unmapped value is never one |
+| `Instrumenttyp` | `instrument_type` + `type_source` | empty for all of 2016-17: inferred from the ISIN's other rows (unanimous, then ≥ 90% majority), then from the instrument name |
+| `Instrumentnamn` | `share_class` | `ser. B`, `serie B`, trailing `B`, pref, SDB; 53 ISINs carry conflicting classes |
+| `Pris`, `Valuta` | `price`, `currency` | native currency kept; SEK for 95% of rows, then CAD, EUR, USD |
+| `Handelsplats` | `venue_class` | a venue *name*, not a MIC; `Utanför handelsplats` on 37% of rows |
+| `Status` | `chain_status` | Aktuell / Reviderad / Makulerad, with the correction chains inferred |
+
+Four problems that shaped the code:
+
+1. **No notification id.** Corrections are linked one-to-one to the version they correct by scoring the
+   fields (ISIN 3, instrument name 2, kind 2, volume/price/venue 1); ties are left unlinked rather than
+   guessed. 9,036 links, 60 ambiguous. ([`chains.py`](src/fi_insider_scanner/canon/chains.py))
+2. **Upstream statuses go stale.** The public mirror refetches only three days, so a row corrected later
+   keeps `Aktuell`. After a documented horizon the pipeline infers supersession itself.
+3. **Nine broken records** (a newline inside a field, 2018 and 2020). They are quarantined with their line
+   numbers, not repaired: the matching halves are not adjacent and pairing them would be a guess.
+4. **Yahoo rescales history.** Securitas 1.20×, Dustin 2.0×, Scandic 1.4× before their rights issues — not
+   in `Stock Splits`. Found by verifying tickers against the register's own execution prices; the scale
+   segments are estimated from that same comparison, and market caps use the register price.
+   ([ADR-042](DECISIONS.md), [`prices.py`](src/fi_insider_scanner/market/prices.py))
+
+The only direct access to FI's own service is an incremental export used for the current-quarter case: one
+thread, 5-second pauses, at most 20 requests, windows halved to stay under the silent 1,000-row cap, and a
+hard error instead of a truncated page. ([`fi_export.py`](src/fi_insider_scanner/ingest/fi_export.py))
+
+---
+
+## Layout
 
 ```
+src/fi_insider_scanner/
+  ingest/    bulk snapshot · raw CSV parser (record identity, quarantine) · FI export client · refresh · profile
+  canon/     value parsers · taxonomies · names · share class · row mapping (Pydantic) · revision chains · visibility
+  market/    yfinance cache · FX · Nasdaq listings · ticker resolution · price rescaling · market cap · enrichment
+  gates/     open-market predicates · structural subscription · clusters · dilution · routine · large holder · closed period · score
+  backtest/  events · returns · matched control · statistics · survivorship · placebo · pre-registration · verdict · reports
+  dossier/   case selection and the WHO / WHERE / WHEN write-up
+backtest/    00 ingest profile · 01 canonical · 02 dry run · 03 resolution · 05 gates+mcap · preregistration · 10 A · 11 B · 12 control · 13 survivorship · 20 verdict
+dossier/     candidates and the case dossier
+tests/       226 offline tests, including AST guards and snapshot invariants
+config/      pipeline.toml — every threshold, frozen by the pre-registration
+```
+
+Storage is SQLite plus gzipped snapshots plus per-ticker CSV caches, all under `data/` and git-ignored:
+the repository holds code, configuration, reports and decisions, and every artefact can be rebuilt from the
+pinned snapshot.
+
+## Running it
+
+```bash
 uv sync
-uv run pytest                      # 180 test offline
-uv run fi-scan ingest              # snapshot bulk pinnato -> data/raw/bulk
-uv run fi-scan profile             # 00_ingest_profile.md
-uv run fi-scan canon               # tabella canonica in data/fi.sqlite, 01_canonical.md
-uv run fi-scan events-dryrun       # 02_events_dryrun.md (solo registro + FX)
-uv run fi-scan resolve             # ISIN -> ticker .ST verificato sui prezzi del registro (lungo)
-uv run fi-scan enrich              # azioni e date report da Yahoo (lungo)
-uv run fi-scan gates-mcap          # 05_gates_mcap.md (nessun rendimento)
-uv run fi-scan freeze              # preregistration.md: committare PRIMA del backtest
-uv run fi-scan backtest            # 10, 11, 12, 13, 20
-uv run fi-scan refresh             # export FI incrementale (un thread, pausa 5 s, <= 20 richieste) -> data/fi_refreshed.sqlite
-uv run fi-scan caso-zero           # dossier/<data>_<emittente>.md
+uv run pytest                 # 226 offline tests, no network
+uv run fi-scan ingest         # pinned snapshot -> data/raw/bulk (42 MB)
+uv run fi-scan profile        # report 00: counts, invariants, per-year regimes
+uv run fi-scan canon          # canonical table -> data/fi.sqlite, report 01
+uv run fi-scan events-dryrun  # report 02: events and clusters, register + FX only
+uv run fi-scan resolve        # ISIN -> verified .ST ticker (network, resumable, ~1 h cold)
+uv run fi-scan enrich         # share counts and report dates (network, resumable)
+uv run fi-scan gates-mcap     # report 05: gates with market data, no returns yet
+uv run fi-scan freeze         # write the pre-registration, then commit it
+uv run fi-scan backtest       # reports 10-13 and the verdict
+uv run fi-scan refresh        # polite FI incremental export (case zero only)
+uv run fi-scan case-zero      # candidate list and dossier
 ```
 
-Nessuna chiamata a modelli linguistici in nessun passo: token e costo per run = 0.
+Network steps cache every response to disk, so a second run is offline and reproducible.
 
-## Cosa non è stato possibile fare
+## Performance
 
-Elenco in fondo a `backtest/20_verdict.md`; decisioni collegate: ADR-032, ADR-034, ADR-042, ADR-043.
+The hot paths were profiled and rewritten; the reports come out byte-identical apart from their timestamps.
 
+| path | before | after | what changed |
+|---|---:|---:|---|
+| `attach_mcap` | 15.6 ms/event | 5.0 ms/event | the execution price was found by scanning all 166k register rows per event; now a dict lookup, and split ratios are cached per symbol |
+| `detect_clusters`, large issuer | 3.33 s | 0.69 s | sliding window instead of a quadratic scan; the structural-subscription grouping runs only once a window is found |
+| `detect_clusters`, mid issuer | 265 ms | 97 ms | the visible slice is cut to the last year before the masks, and `person_key` is precomputed when an issuer has no merge rules |
+| `Pool.at` (peer pool) | 2.7 ms/event | ~0 ms | band labels computed once for the whole panel; peer selection on numpy arrays |
+| `event_return` | 2.1 ms/event | 1.6 ms/event | numpy views instead of a per-call column cast |
 
-## Risultati (snapshot `27d8523376`, configurazione `b67e29d7…`, run 2026-09-14)
+`find_window` is checked against a brute-force reference on 40 random inputs, so the fast path cannot
+silently disagree with the obvious one. ([`test_fastpaths.py`](tests/test_fastpaths.py))
 
-Verdetto pre-registrato: **NON REGGE** (criterio: matched control con media ≤ 0). Dettagli in `backtest/20_verdict.md`.
+## Tests
 
-| cella (126 sessioni, variante b, eccesso) | n | media | mediana | t iid | t CR1 emittente | CI 95% | MDE |
-|---|---|---|---|---|---|---|---|
-| **P: A, 50-300M, vs OMXSPI** (primaria) | 817 | −2,39% | −4,75% | −1,83 | −1,96 | [−5,00%, +0,12%] | 3,66% |
-| C: stessi eventi vs peer stessa banda | 817 | −0,58% | 0,00% | −0,33 | −0,34 | [−3,80%, +2,54%] | 4,90% |
-| A, <50M, vs OMXSPI / vs peer | 509 | +1,66% / +4,17% | | 0,85 / 1,38 | | | |
-| A, >300M, vs OMXSPI / vs peer | 1.892 | −0,05% / +0,23% | | −0,09 / 0,29 | | | |
-| B: cluster 4/4, 50-300M, vs OMXSPI / vs peer | 238 | −1,22% / −0,62% | | −0,48 / −0,18 | | | 7,06% |
-| placebo (−252 sessioni) vs OMXSPI / vs peer | 636 | +1,76% / **+4,54%** | | 1,19 / **2,31** | | | |
+```
+pytest -q            # 226 tests, offline
+pytest -m snapshot   # snapshot checks against the pinned data
+ruff check . && ruff format --check .
+```
 
-Per anno la P e' positiva nel 2016-2018 e 2020 (piccoli n) e negativa dal 2022 al 2025; la scomposizione mostra che la parte contro l'indice e' quasi tutta effetto dimensione. Copertura della P: 68,3% degli eventi A (b) ha un rendimento osservabile; 2.126 eventi senza banda. Formule, tutte le celle, closed period e survivorship nei report 10-13.
+GitHub Actions runs the linter, the formatter check and the offline suite on every push
+([`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
 
-Riferimento USA (stessa definizione): +3,50% (t 4,30, iid) vs IWM; matched control +2,41% (t 2,02).
+Beyond the unit tests of parsing, dedup, share class, gates, returns and statistics, three families are
+worth naming: **guards** (no import or path from another repository; no `expost_` column in a decision
+module; no recommendation vocabulary in a generated dossier), **equivalence** (the optimised window search
+against the naive one), and **point-in-time** (a gate fed the full history with an `as_of` must agree with
+the same gate fed only the data up to `as_of`).
 
-Caso zero: `dossier/2026-09-14_saniona-ab.md` (Saniona AB, T = 2026-09-01, tre persone, punteggio provvisorio 5/9*, nessun verdetto).
+## License and data
+
+Code: [MIT](LICENSE). Register data: CC0, from the upstream mirror; no upstream code is copied or executed.
+Market data comes from Yahoo Finance through `yfinance` and is cached locally for reproducibility, not
+redistributed. This repository produces measurements and a dossier: no orders, no recommendations, and the
+verdict is about one number replicating, nothing else.

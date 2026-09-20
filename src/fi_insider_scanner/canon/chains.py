@@ -1,20 +1,19 @@
-"""Catene di revisione e stato di ogni riga (ADR-002, ADR-014).
+"""Revision chains and the status of every row (ADR-002, ADR-014).
 
-Il registro non ha un ID notifica. Una correzione (`Korrigering=Ja`) viene collegata
-uno-a-uno alla versione precedente con stesso emittente, persona e data di transazione e
-pubblicazione *strettamente* precedente, scegliendo il punteggio più alto sui campi e, a
-parità, la pubblicazione più recente. Parità piena -> ambiguo, nessun link.
+The register carries no notification id. A correction (`Korrigering=Ja`) is linked one-to-one to the
+previous version with the same issuer, person and trade date and a *strictly* earlier publication,
+choosing the highest score over the fields and, on a tie, the most recent publication. A full tie ->
+ambiguous, no link.
 
-Status stantii upstream: dopo `stale_status_horizon` una correzione può avere come
-predecessore una riga ancora `Aktuell` (il job civictech non l'ha ri-scaricata). In quel caso,
-e solo con corrispondenza forte (stesso ISIN e stesso tipo), la riga diventa
-`superseded_inferred`.
+Stale upstream statuses: after `stale_status_horizon` a correction can have a predecessor still marked
+`Aktuell`, because the civictech job never re-downloaded it. In that case, and only on a strong match
+(same ISIN and same type), the row becomes `superseded_inferred`.
 
 chain_status:
-- current               Aktuell non superata
-- superseded            Reviderad collegata a una versione successiva
-- superseded_inferred   Aktuell superata da una correzione post-orizzonte (STATUS_STALE_UPSTREAM)
-- orphan_revised        Reviderad senza successore identificabile
+- current               Aktuell, not superseded
+- superseded            Reviderad linked to a later version
+- superseded_inferred   Aktuell superseded by a correction published after the horizon (STATUS_STALE_UPSTREAM)
+- orphan_revised        Reviderad with no identifiable successor
 - cancelled             Makulerad
 """
 
@@ -26,7 +25,7 @@ import pandas as pd
 
 SCORE_WEIGHTS = {"isin": 3, "instrument_name": 2, "txn_kind": 2, "volume": 1, "price": 1, "venue_raw": 1}
 MIN_SCORE = 2
-MIN_SCORE_STALE = 5  # ISIN + tipo
+MIN_SCORE_STALE = 5  # ISIN + type
 
 
 @dataclass
@@ -115,13 +114,15 @@ def build_chains(df: pd.DataFrame, stale_horizon: pd.Timestamp) -> tuple[pd.Data
     stats.orphan_revised = int((chain_status == "orphan_revised").sum())
 
     superseded: dict[str, pd.Timestamp] = dict(successor_pub)
-    # Reviderad orfane: fine visibilità = prima correzione successiva della stessa persona
-    # nello stesso emittente; se non esiste, zero visibilità in as_seen.
+    # orphan Reviderad rows: visibility ends at the next correction by the same person
+    # for the same issuer; without one, they are never visible in as_seen
     orphans = df[chain_status == "orphan_revised"]
     if not orphans.empty:
         corr_pub = df.loc[is_corr, ["issuer_key", "name_key", "published_at"]].sort_values("published_at")
         by_person = {k: g["published_at"].to_numpy() for k, g in corr_pub.groupby(["issuer_key", "name_key"])}
-        for rec, issuer, person, pub in zip(orphans["record_id"], orphans["issuer_key"], orphans["name_key"], orphans["published_at"]):
+        for rec, issuer, person, pub in zip(
+            orphans["record_id"], orphans["issuer_key"], orphans["name_key"], orphans["published_at"], strict=True
+        ):
             arr = by_person.get((issuer, person))
             later = None
             if arr is not None:
@@ -130,7 +131,7 @@ def build_chains(df: pd.DataFrame, stale_horizon: pd.Timestamp) -> tuple[pd.Data
             superseded[rec] = later if later is not None else pub
     superseded_at = pd.to_datetime(pd.Series([superseded.get(r) for r in rid], index=df.index, dtype="object"))
 
-    pub_by_id = dict(zip(rid, df["published_at"]))
+    pub_by_id = dict(zip(rid, df["published_at"], strict=True))
     first_pub = {}
     for r in rid:
         seen, cur, earliest = set(), r, pub_by_id[r]

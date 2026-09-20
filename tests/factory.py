@@ -47,7 +47,9 @@ def txn(
         "pdmr_is_natural_person": natural,
         "trade_date": trade_ts,
         "txn_kind": kind,
-        "direction": direction if direction is not None else (1 if kind in ("acq_purchase", "subscription", "grant", "exercise_in") else -1),
+        "direction": direction
+        if direction is not None
+        else (1 if kind in ("acq_purchase", "subscription", "grant", "exercise_in") else -1),
         "instrument_type": itype,
         "is_share_program": program,
         "price": price,

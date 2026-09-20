@@ -1,14 +1,14 @@
-"""Parse del CSV del registro (bulk civictech o export FI) in righe grezze da 22 campi.
+"""Parsing of the register CSV (civictech bulk or FI export) into raw 22-field rows.
 
-Nessuna interpretazione dei valori: solo struttura, pulizia degli spazi speciali,
-identità del record e quarantena dei record rotti che non si ricompongono in modo univoco.
+No value is interpreted here: only structure, cleanup of the special spaces, record identity and
+quarantine of the broken records that cannot be recomposed unambiguously.
 
-Forme di rottura note (ADR-004):
-- record corto (< 22 campi): una newline non quotata ha spezzato la riga;
-- record da 22 campi "spostato" (bulk civictech, Biovica 2018/2020): una metà ha i campi
-  Transaktionsdatum..Status vuoti, l'altra ha Publiceringsdatum vuoto e i 7 valori di coda
-  scritti nei campi 1..7.
-Si ricompone solo una troncata seguita *immediatamente* dalla sua continuazione.
+Known breakages (ADR-004):
+- short record (< 22 fields): an unquoted newline split the line;
+- "shifted" 22-field record (civictech bulk, Biovica 2018 and 2020): one half has the fields
+  Transaktionsdatum..Status empty, the other has Publiceringsdatum empty and the seven trailing values
+  written into fields 1..7.
+Only a truncated record followed *immediately* by its continuation is recomposed.
 """
 
 from __future__ import annotations
@@ -55,7 +55,7 @@ _DT_RE = re.compile(r"^\d{4}-\d{2}-\d{2}( \d{2}:\d{2}:\d{2})?$")
 
 
 class SchemaDriftError(ValueError):
-    """L'header non coincide con le 22 colonne attese."""
+    """The header does not match the 22 expected columns."""
 
 
 @dataclass
@@ -77,7 +77,7 @@ def clean_field(value: str) -> str:
 
 
 def decode(data: bytes) -> tuple[str, str, bool]:
-    """UTF-16 (export FI, di norma LE senza BOM) o UTF-8 con/senza BOM (bulk)."""
+    """UTF-16 (FI export, normally LE without BOM) or UTF-8 with or without BOM (bulk)."""
     if data[:2] in (b"\xff\xfe", b"\xfe\xff"):
         return data.decode("utf-16"), "utf-16", True
     if len(data) >= 4 and data[1:2] == b"\x00" and data[3:4] == b"\x00":
@@ -88,14 +88,14 @@ def decode(data: bytes) -> tuple[str, str, bool]:
 
 
 def _strip_trailing_empty(fields: list[str]) -> list[str]:
-    # L'export FI chiude ogni riga con ';' -> 23 campi con l'ultimo vuoto.
+    # the FI export ends every line with ';' -> 23 fields, the last one empty
     if len(fields) == N_FIELDS + 1 and fields[-1].strip() == "":
         return fields[:-1]
     return fields
 
 
 def record_ids(tuples: list[tuple[str, ...]]) -> list[str]:
-    """sha256 dei 22 campi puliti + indice di occorrenza tra tuple identiche."""
+    """sha256 of the 22 cleaned fields plus the occurrence index among identical tuples."""
     seen: Counter = Counter()
     out = []
     for t in tuples:
@@ -110,7 +110,7 @@ def _is_dt(value: str) -> bool:
 
 
 def _classify(fields: list[str]) -> tuple[str, list[str] | None]:
-    """Restituisce (tipo, parte utile): ok / truncated(testa) / continuation(coda) / malformed."""
+    """Returns (kind, usable part): ok / truncated(head) / continuation(tail) / malformed."""
     blank = [f.strip() == "" for f in fields]
     if len(fields) == N_FIELDS:
         tail_blank = all(blank[TAIL_START:])
@@ -131,8 +131,8 @@ def _classify(fields: list[str]) -> tuple[str, list[str] | None]:
 def _join(head: list[str], tail: list[str]) -> list[str] | None:
     if len(head) + len(tail) == N_FIELDS:
         return head + tail
-    if len(head) + len(tail) - 1 == N_FIELDS:  # rottura dentro un campo
-        return head[:-1] + [head[-1] + " " + tail[0]] + tail[1:]
+    if len(head) + len(tail) - 1 == N_FIELDS:  # the break fell inside a field
+        return [*head[:-1], head[-1] + " " + tail[0], *tail[1:]]
     return None
 
 
@@ -174,9 +174,7 @@ def parse_register_csv(data: bytes) -> RawParseResult:
                 consumed.add(i + 1)
                 repairs["join"] += 1
                 continue
-        quarantine_rows.append(
-            {"line_no": ln, "n_fields": len(fields), "kind": kind, "raw": ";".join(f for f in fields if f.strip())}
-        )
+        quarantine_rows.append({"line_no": ln, "n_fields": len(fields), "kind": kind, "raw": ";".join(f for f in fields if f.strip())})
 
     cleaned = [tuple(clean_field(f) for f in fields) for _, fields, _ in good]
     df = pd.DataFrame(cleaned, columns=list(EXPECTED_HEADER), dtype="string")

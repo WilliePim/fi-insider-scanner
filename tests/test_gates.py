@@ -1,6 +1,6 @@
 import pandas as pd
-from factory import T, register, txn, visible_all
 
+from factory import T, register, txn, visible_all
 from fi_insider_scanner.gates.closed_period import days_since_report, window_label
 from fi_insider_scanner.gates.dilution import dilution_verdict, share_growth
 from fi_insider_scanner.gates.large_holder import large_holder, position_lb, symbolic_purchase
@@ -8,8 +8,13 @@ from fi_insider_scanner.gates.routine import routine_metrics
 from fi_insider_scanner.gates.score import Layer1
 
 DC = {
-    "participation_days": 5, "trap_days": 75, "growth_blocked": 0.25, "growth_caution": 0.10,
-    "baseline_gap_min_days": 180, "baseline_gap_max_days": 700, "shares_lag_days": 45,
+    "participation_days": 5,
+    "trap_days": 75,
+    "growth_blocked": 0.25,
+    "growth_caution": 0.10,
+    "baseline_gap_min_days": 180,
+    "baseline_gap_max_days": 700,
+    "shares_lag_days": 45,
 }
 RC = {"lookback_days": 365, "min_months": 6, "max_dispersion": 0.25}
 
@@ -22,7 +27,7 @@ def test_growth_blocked_and_not_yet_public():
     s = shares(("2019-01-15", 10_000_000), ("2020-01-10", 13_000_000))
     v = visible_all([txn()])
     assert dilution_verdict(v, T("2020-03-01"), T("2020-03-15"), DC, s).verdict == "BLOCKED"
-    # a 2020-02-01 l'osservazione del 2020-01-10 non è ancora pubblica (lag 45): resta solo il 2019 -> nessuna baseline
+    # at 2020-02-01 the 2020-01-10 observation is not public yet (lag 45): only 2019 is left -> no baseline
     assert dilution_verdict(v, T("2020-01-25"), T("2020-02-01"), DC, s).verdict == "UNKNOWN"
 
 

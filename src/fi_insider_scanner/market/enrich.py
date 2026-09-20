@@ -1,4 +1,4 @@
-"""Scarica in cache azioni (`shares_full`) e date report per i ticker risolti. Ripartibile."""
+"""Caches share counts (`shares_full`) and report dates for the resolved tickers. Resumable."""
 
 from __future__ import annotations
 
@@ -8,7 +8,9 @@ from . import yf_cache
 
 
 def usable_symbols(resolution: pd.DataFrame) -> list[str]:
-    ok = resolution[resolution["symbol"].notna() & (resolution["verified"].isna() | resolution["verified"].map(lambda v: v is True or v == 1))]
+    ok = resolution[
+        resolution["symbol"].notna() & (resolution["verified"].isna() | resolution["verified"].map(lambda v: v is True or v == 1))
+    ]
     return sorted(set(ok["symbol"]))
 
 

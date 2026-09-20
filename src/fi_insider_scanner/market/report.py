@@ -1,8 +1,8 @@
-"""Report del checkpoint 4: copertura della risoluzione ISIN -> ticker."""
+"""Checkpoint 4 report: coverage of the ISIN -> ticker resolution."""
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pandas as pd
 
@@ -30,8 +30,10 @@ def build_report(res: pd.DataFrame, canonical: pd.DataFrame, a: pd.DataFrame | N
     out: list[str] = []
     w = out.append
     w("# 03 — Risoluzione ISIN → ticker Yahoo\n")
-    w(f"Generato {datetime.now(timezone.utc).isoformat(timespec='seconds')}. Universo: ISIN con righe azionarie valide nel registro. "
-      "Un ticker è `verificato` se i prezzi on-venue in SEK del registro cadono nel range giornaliero Yahoo (±2%) per ≥ 80% di ≥ 3 righe.\n")
+    w(
+        f"Generato {datetime.now(UTC).isoformat(timespec='seconds')}. Universo: ISIN con righe azionarie valide nel registro. "
+        "Un ticker è `verificato` se i prezzi on-venue in SEK del registro cadono nel range giornaliero Yahoo (±2%) per ≥ 80% di ≥ 3 righe.\n"
+    )
     w("## Esito per ISIN\n")
     w(md_table(res["stato"].value_counts().rename_axis("stato").reset_index(name="ISIN")))
     w("\n## Metodo del ticker accettato\n")

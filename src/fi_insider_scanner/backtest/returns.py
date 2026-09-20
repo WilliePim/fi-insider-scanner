@@ -1,15 +1,15 @@
-"""Rendimenti evento (ADR-028).
+"""Event returns (ADR-028).
 
-Calendario = sessioni del benchmark (^OMXSPI).
-- sessione di ingresso = prima sessione con data > giorno di pubblicazione D
-- bar d'ingresso del titolo = primo bar con data >= sessione di ingresso, entro `max_stale_sessions`
-  (mai un prezzo precedente: sarebbe anteriore alla pubblicazione)
-- sessione di uscita = sessione di ingresso + h; bar d'uscita = ultimo bar del titolo <= sessione di uscita
-- r = Close_uscita / Close_ingresso - 1 (split-adjusted, senza dividendi); benchmark sulle stesse date
-- eccesso = r - r_bench
-Stati: OK, TOO_RECENT, NO_HISTORY, NO_ENTRY_BAR, ENDED_IN_WINDOW, ARTEFACT (|r| > soglia).
-Variante "parità di bar": uscita = bar d'ingresso + h nella serie del titolo (come il test USA).
-`expost_*` sono diagnostici calcolati con dati futuri: mai usati per selezionare eventi.
+The calendar is the benchmark's own sessions (^OMXSPI).
+- entry session = the first session dated after the publication day D
+- the stock's entry bar = the first bar dated on or after the entry session, within `max_stale_sessions`
+  (never an earlier price: it would predate the publication)
+- exit session = entry session + h; exit bar = the stock's last bar on or before the exit session
+- r = Close_exit / Close_entry - 1 (split-adjusted, dividends excluded); the benchmark over the same dates
+- excess = r - r_bench
+Statuses: OK, TOO_RECENT, NO_HISTORY, NO_ENTRY_BAR, ENDED_IN_WINDOW, ARTEFACT (|r| above the threshold).
+The "bar parity" variant exits at entry bar + h in the stock's own series, as the US test does.
+`expost_*` columns are diagnostics computed with future data: never used to select an event.
 """
 
 from __future__ import annotations
@@ -68,9 +68,9 @@ def event_return(
     stale_entry = int(sessions.searchsorted(entry_date, side="left")) - i0
     if stale_entry > max_stale_sessions:
         return EventReturn("NO_ENTRY_BAR", stale_entry_sessions=stale_entry)
-    close = history["Close"].astype(float)
-    adj = history["Adj Close"].astype(float) if "Adj Close" in history else close
-    p0, a0 = float(close.iloc[j0]), float(adj.iloc[j0])
+    close = history["Close"].to_numpy(dtype=float, copy=False)
+    adj = history["Adj Close"].to_numpy(dtype=float, copy=False) if "Adj Close" in history else close
+    p0, a0 = float(close[j0]), float(adj[j0])
     if not p0 > 0:
         return EventReturn("NO_ENTRY_BAR")
 
@@ -86,18 +86,24 @@ def event_return(
         exit_date = hidx[j1]
         stale_exit = i0 + horizon - int(sessions.searchsorted(exit_date, side="left"))
         if stale_exit > max_stale_sessions:
-            last_flat = float(close.iloc[j1]) / p0 - 1
+            last_flat = float(close[j1]) / p0 - 1
             b_flat = bench.iloc[i0 + horizon] / _asof_value(bench, entry_date) - 1
-            return EventReturn("ENDED_IN_WINDOW", entry_date=entry_date, exit_date=exit_date, stale_entry_sessions=stale_entry,
-                               stale_exit_sessions=stale_exit, excess_last_flat=float(last_flat - b_flat))
+            return EventReturn(
+                "ENDED_IN_WINDOW",
+                entry_date=entry_date,
+                exit_date=exit_date,
+                stale_entry_sessions=stale_entry,
+                stale_exit_sessions=stale_exit,
+                excess_last_flat=float(last_flat - b_flat),
+            )
         exit_date_for_bench = exit_session
     b0 = _asof_value(bench, entry_date)
     b1 = _asof_value(bench, exit_date if own_bars else exit_date_for_bench)
-    r = float(close.iloc[j1]) / p0 - 1
+    r = float(close[j1]) / p0 - 1
     rb = b1 / b0 - 1
-    ra = float(adj.iloc[j1]) / a0 - 1 if a0 > 0 else None
-    window = close.iloc[j0 : j1 + 1]
-    daily = window.pct_change().abs().max() if len(window) > 1 else 0.0
+    ra = float(adj[j1]) / a0 - 1 if a0 > 0 else None
+    window = close[j0 : j1 + 1]
+    daily = np.abs(np.diff(window) / window[:-1]).max() if len(window) > 1 else 0.0
     status = "ARTEFACT" if abs(r) > artefact else "OK"
     return EventReturn(
         status=status,
@@ -115,7 +121,7 @@ def event_return(
 
 
 def monthly_excess(history: pd.DataFrame, bench: pd.Series, entry: pd.Timestamp, exit_: pd.Timestamp) -> pd.DataFrame:
-    """Rendimenti in eccesso mensili dell'evento tra ingresso e uscita (per il portafoglio calendar-time)."""
+    """Monthly excess returns of the event between entry and exit (for the calendar-time portfolio)."""
     close = history["Close"].astype(float)
     s = close[(close.index >= entry) & (close.index <= exit_)]
     b = bench[(bench.index >= entry) & (bench.index <= exit_)]

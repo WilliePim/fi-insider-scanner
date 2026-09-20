@@ -1,5 +1,4 @@
 from factory import T, register, txn, visible_all
-
 from fi_insider_scanner.gates.clusters import detect_clusters
 from fi_insider_scanner.gates.structural import context_flags, uniform_price_groups
 
@@ -28,7 +27,7 @@ def test_uniform_price_on_venue_without_issue_is_only_a_flag():
 
 
 def test_on_venue_uniform_price_with_subscription_at_same_price_is_s3():
-    rows = trio(venue="xsto") + [txn("p4 four", "2020-03-15", kind="subscription", price=3.5, venue="off_venue")]
+    rows = [*trio(venue="xsto"), txn("p4 four", "2020-03-15", kind="subscription", price=3.5, venue="off_venue")]
     groups = uniform_price_groups(visible_all(rows), 3, 20)
     assert bool(groups.loc[0, "s3"]) and bool(groups.loc[0, "issue_evidence"])
 

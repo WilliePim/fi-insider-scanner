@@ -1,14 +1,14 @@
-"""Survivorship (ADR-032): copertura e scenari per gli eventi senza rendimento osservabile.
+"""Survivorship (ADR-032): coverage and scenarios for the events with no observable return.
 
-Scenari di eccesso a 126 giorni assegnati agli eventi non risolti:
-- S_minus100: titolo a -100%        -> eccesso = -1 - r_bench
-- S_minus50:  titolo a -50%         -> eccesso = -0,5 - r_bench
-- S0:         eccesso nullo         -> 0
-- S_plus:     uscita per acquisizione -> +15%
-- S_draw:     estrazione dalla distribuzione osservata (seed fisso)
-r_bench = rendimento medio del benchmark sugli eventi osservati dello stesso insieme.
+126-day excess scenarios assigned to the unresolved events:
+- S_minus100: the stock at -100%          -> excess = -1 - r_bench
+- S_minus50:  the stock at -50%           -> excess = -0.5 - r_bench
+- S0:         no excess                   -> 0
+- S_plus:     exit through an acquisition -> +15%
+- S_draw:     a draw from the observed distribution (fixed seed)
+r_bench = the mean benchmark return over the observed events of the same set.
 
-Break-even: quota p* dei non risolti che, a -100%, porta a zero la media osservata.
+Break-even: the share p* of the unresolved events that, at -100%, brings the observed mean to zero.
   (n_obs * m - p * n_u * (1 + r_bench)) / (n_obs + p * n_u) = 0  =>  p* = n_obs * m / (n_u * (1 + r_bench))
 """
 
@@ -44,16 +44,16 @@ def break_even_share(mean: float, n_obs: int, n_unresolved: int, r_bench_mean: f
 
 
 def pooled(observed: pd.DataFrame, added: pd.DataFrame, value_col: str, draws: int, seed: int, min_groups: int) -> Summary:
-    """`observed`/`added`: colonne value_col, issuer_key, month."""
+    """`observed`/`added`: columns value_col, issuer_key, month."""
     both = pd.concat([observed[[value_col, "issuer_key", "month"]], added[[value_col, "issuer_key", "month"]]], ignore_index=True)
     return summarize(both[value_col], both["issuer_key"], both["month"], draws, seed, min_groups)
 
 
 def acquired_likely(rows: pd.DataFrame, lookback_days: int) -> set[str]:
-    """Emittenti con >= 2 persone che vendono fuori mercato allo stesso prezzo nei giorni prima dell'ultima riga.
+    """Issuers with at least 2 persons selling off-venue at the same price in the days before the issuer's last row.
 
-    `rows`: righe correnti del registro (issuer_key, trade_date, txn_kind, venue_class, price, name_key).
-    Indizio di offerta pubblica accettata, non prova.
+    `rows`: the register's current rows (issuer_key, trade_date, txn_kind, venue_class, price, name_key).
+    A hint of an accepted tender offer, not a proof.
     """
     last = rows.groupby("issuer_key")["trade_date"].max()
     sales = rows[rows["txn_kind"].eq("disp_sale") & rows["venue_class"].eq("off_venue") & (rows["price"].fillna(0) > 0)]

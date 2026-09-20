@@ -1,4 +1,4 @@
-"""Persistenza delle tabelle canoniche in SQLite (stdlib)."""
+"""Persistence of the canonical tables in SQLite (stdlib)."""
 
 from __future__ import annotations
 
@@ -18,7 +18,7 @@ _DATETIME_COLS = ("published_at", "trade_date", "superseded_at", "first_publishe
 def _connect(path: Path | None = None) -> sqlite3.Connection:
     path = path or config.DB_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
-    # Più processi (resolve, dry-run) possono scrivere: attesa lunga sul lock invece di fallire.
+    # several processes (resolve, dry-run) may write: wait on the lock rather than fail
     return sqlite3.connect(path, timeout=120)
 
 
@@ -69,7 +69,13 @@ def save_rules(rules: list[MergeRule], path: Path | None = None) -> None:
 def load_rules(path: Path | None = None) -> list[MergeRule]:
     df = load_frame("merge_rules", path)
     return [
-        MergeRule(r.issuer_key, r.long_key, r.short_key, pd.Timestamp(r.valid_from), None if r.valid_until is None or pd.isna(r.valid_until) else pd.Timestamp(r.valid_until))
+        MergeRule(
+            r.issuer_key,
+            r.long_key,
+            r.short_key,
+            pd.Timestamp(r.valid_from),
+            None if r.valid_until is None or pd.isna(r.valid_until) else pd.Timestamp(r.valid_until),
+        )
         for r in df.itertuples()
     ]
 

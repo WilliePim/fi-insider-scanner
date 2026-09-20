@@ -1,5 +1,4 @@
-from factory import T, txn, visible_all
-
+from factory import txn, visible_all
 from fi_insider_scanner.gates.openmarket import (
     a_exact,
     a_onvenue,
@@ -51,7 +50,7 @@ def test_sell_to_cover_candidates():
     ]
     v = visible_all(rows).sort_values("trade_date")
     flags = sell_to_cover_candidates(v, 30)
-    got = {(p, str(d.date())): bool(f) for p, d, f in zip(v["name_key"], v["trade_date"], flags) if True}
+    got = {(p, str(d.date())): bool(f) for p, d, f in zip(v["name_key"], v["trade_date"], flags, strict=True) if True}
     assert got[("anna svensson", "2020-03-05")] is True
     assert got[("anna svensson", "2020-05-05")] is False
     assert got[("erik berg", "2020-03-05")] is False

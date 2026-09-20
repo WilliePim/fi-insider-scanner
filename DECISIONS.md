@@ -474,3 +474,41 @@ di oltre 200 giorni, l'attributo vale UNKNOWN. Si applica nelle celle closed per
 grezzo resta salvato per trasparenza. Le date report del dossier vengono dalla fonte primaria (comunicati, report).
 
 **Test:** `tests/test_gates.py::test_closed_period` (1.560 → UNKNOWN, 150 → OUTSIDE).
+
+
+## ADR-044 — Lingua: codice e README in inglese, analisi in italiano
+
+**Contesto.** Il repository diventa pubblico. Il codice e il README si rivolgono a chi legge software; i report, i
+dossier e questi ADR sono il quaderno di laboratorio dello studio e sono già scritti, verificati e citati in italiano.
+Tradurli significherebbe ritoccare testo che documenta numeri congelati.
+
+**Decisione** (dopo il verdetto, nessun effetto sui risultati). Inglese per codice, docstring, commenti, nomi dei test,
+messaggi della CLI e README; italiano per i report `backtest/`, i dossier e DECISIONS.md. Le stringhe italiane stampate
+dentro i report restano tali anche quando vivono in moduli inglesi (`backtest/report.py`, `dossier/build.py`): il
+confine è fra ciò che spiega il codice e ciò che è il prodotto dell'analisi.
+
+**Conseguenze.** Un lettore che apre `src/` non incontra italiano; un lettore che apre `backtest/` legge lo stesso
+testo che era stato committato al momento del verdetto. Le chiavi di `config/pipeline.toml` restano in italiano
+(`[caso_zero]`, `banda`): cambiarle cambierebbe lo sha256 pre-registrato (ADR-035).
+
+**Test:** `tests/test_guards.py` (vocabolario vietato) continua a controllare il testo generato, in italiano.
+
+
+## ADR-045 — Riscrittura dei percorsi caldi a numeri invariati
+
+**Contesto.** Il backtest completo impiegava circa 22 minuti, quasi tutti in tre punti: il prezzo di esecuzione di un
+evento cercato scandendo le 166.210 righe del registro, la ricerca del cluster quadratica sulle righe dell'emittente e
+il pool del matched control ricostruito a ogni evento.
+
+**Decisione** (dopo il verdetto). Ottimizzare solo la forma del calcolo, mai la sua definizione: dizionario
+`record_id -> prezzo`, finestra scorrevole lineare per i cluster con il raggruppamento S3 calcolato solo dopo aver
+trovato una finestra, bande del pool etichettate una volta sola e selezione del peer su array numpy, viste numpy nei
+rendimenti. Criterio di accettazione dichiarato prima: i report rigenerati devono essere identici a quelli committati,
+timestamp a parte.
+
+**Esito.** `gates-mcap` + `backtest` in 12 minuti (5m49s + 6m10s); `00`, `01`, `02`, `05`, `10`, `11`, `12` e
+`preregistration` identici al byte, `13` e `20` diversi solo per le due correzioni volute (denominatore della
+quota non risolta, 41% invece di 37%, e sezioni del verdetto ora generate invece che scritte a mano).
+
+**Test:** `tests/test_fastpaths.py` confronta `find_window` con una ricerca a forza bruta su 40 input casuali e copre
+`Env.register_price`, `weak_type` e `Register.visible(since=…)`; il resto della suite (226 test) resta invariato.

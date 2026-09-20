@@ -1,4 +1,4 @@
-"""Costruzione della tabella canonica completa da righe grezze."""
+"""Building the full canonical table from the raw rows."""
 
 from __future__ import annotations
 

@@ -1,13 +1,13 @@
-"""Identità delle persone: normalizzazione, riconoscimento entità, merge conservativo.
+"""Person identity: normalisation, entity detection, conservative merges.
 
-Regole (ADR-009):
-- chiave = NFKC, spazi speciali, spazi compressi, casefold; "Cognome, Nome" -> "nome cognome";
-- un nome con token societari (AB, Ltd, Holding, Stiftelse…) non è una persona fisica;
-- merge solo nello stesso emittente: stesso primo e ultimo token, un solo nome breve
-  (2 token) e una sola variante lunga; più varianti lunghe -> ambiguo, nessun merge;
-- il merge vale dal momento in cui entrambe le forme sono visibili e smette di valere
-  quando compare una seconda variante lunga (point-in-time);
-- nomi uguali a meno dei diacritici: solo flag, mai merge.
+Rules (ADR-009):
+- key = NFKC, special spaces, collapsed spaces, casefold; "Surname, Name" -> "name surname";
+- a name carrying corporate tokens (AB, Ltd, Holding, Stiftelse…) is not a natural person;
+- merges only inside the same issuer: same first and last token, exactly one short form (2 tokens) and
+  exactly one long variant; several long variants -> ambiguous, no merge;
+- a merge holds from the moment both forms are visible and stops holding when a second long variant
+  appears (point-in-time);
+- names equal up to their diacritics: flagged, never merged.
 """
 
 from __future__ import annotations
@@ -19,15 +19,95 @@ from dataclasses import dataclass
 import pandas as pd
 
 _ENTITY_TOKENS = {
-    "ab", "aktiebolag", "(publ)", "publ", "as", "asa", "a/s", "aps", "oy", "oyj", "ltd", "ltd.", "limited",
-    "llc", "lp", "llp", "inc", "inc.", "corp", "corp.", "corporation", "gmbh", "ag", "bv", "b.v.", "nv", "n.v.",
-    "sa", "s.a.", "sas", "sarl", "s.à", "s.a.r.l.", "plc", "holding", "holdings", "invest", "investment",
-    "investments", "investering", "capital", "förvaltning", "fastighet", "fastigheter", "fastighets",
-    "stiftelse", "stiftelsen", "foundation", "trust", "fund", "fond", "fonder", "partners", "kb", "hb",
-    "group", "kommanditbolag", "handelsbolag", "consulting", "management", "ventures", "equity",
-    "pensionskassa", "försäkring", "försäkringsaktiebolag", "bank", "vinstandelsstiftelse", "förening",
-    "ekonomisk", "trading", "konsult", "estate", "company", "co", "co.", "family", "kapital", "invest.",
-    "aktiebolaget", "bolag", "holdco", "sicav", "gp", "lda", "srl", "spa", "s.p.a.", "pty", "bhd",
+    "ab",
+    "aktiebolag",
+    "(publ)",
+    "publ",
+    "as",
+    "asa",
+    "a/s",
+    "aps",
+    "oy",
+    "oyj",
+    "ltd",
+    "ltd.",
+    "limited",
+    "llc",
+    "lp",
+    "llp",
+    "inc",
+    "inc.",
+    "corp",
+    "corp.",
+    "corporation",
+    "gmbh",
+    "ag",
+    "bv",
+    "b.v.",
+    "nv",
+    "n.v.",
+    "sa",
+    "s.a.",
+    "sas",
+    "sarl",
+    "s.à",
+    "s.a.r.l.",
+    "plc",
+    "holding",
+    "holdings",
+    "invest",
+    "investment",
+    "investments",
+    "investering",
+    "capital",
+    "förvaltning",
+    "fastighet",
+    "fastigheter",
+    "fastighets",
+    "stiftelse",
+    "stiftelsen",
+    "foundation",
+    "trust",
+    "fund",
+    "fond",
+    "fonder",
+    "partners",
+    "kb",
+    "hb",
+    "group",
+    "kommanditbolag",
+    "handelsbolag",
+    "consulting",
+    "management",
+    "ventures",
+    "equity",
+    "pensionskassa",
+    "försäkring",
+    "försäkringsaktiebolag",
+    "bank",
+    "vinstandelsstiftelse",
+    "förening",
+    "ekonomisk",
+    "trading",
+    "konsult",
+    "estate",
+    "company",
+    "co",
+    "co.",
+    "family",
+    "kapital",
+    "invest.",
+    "aktiebolaget",
+    "bolag",
+    "holdco",
+    "sicav",
+    "gp",
+    "lda",
+    "srl",
+    "spa",
+    "s.p.a.",
+    "pty",
+    "bhd",
 }
 _ENTITY_SUBSTRINGS = ("stiftelse", "förvaltning", "fastighet", "aktiebolag", "vinstandels", "holding", "invest ab")
 
@@ -82,13 +162,13 @@ class MergeRule:
     long_key: str
     short_key: str
     valid_from: pd.Timestamp
-    valid_until: pd.Timestamp | None  # esclusivo; None = sempre valido dopo valid_from
+    valid_until: pd.Timestamp | None  # exclusive; None = valid forever after valid_from
 
 
 def build_merge_rules(names: pd.DataFrame) -> tuple[list[MergeRule], pd.DataFrame]:
-    """`names`: colonne issuer_key, name_key, first_seen (prima pubblicazione visibile).
+    """`names`: columns issuer_key, name_key, first_seen (the first visible publication).
 
-    Restituisce le regole di merge e un DataFrame di flag (NAME_AMBIGUOUS, NEAR_DUP_NAME).
+    Returns the merge rules and a frame of flags (NAME_AMBIGUOUS, NEAR_DUP_NAME).
     """
     rules: list[MergeRule] = []
     flags: list[dict] = []
@@ -97,7 +177,7 @@ def build_merge_rules(names: pd.DataFrame) -> tuple[list[MergeRule], pd.DataFram
     df = df[df["tokens"].str.len() >= 2]
     df["first_tok"] = df["tokens"].str[0]
     df["last_tok"] = df["tokens"].str[-1]
-    for (issuer, first, last), grp in df.groupby(["issuer_key", "first_tok", "last_tok"], sort=False):
+    for (issuer, _first, _last), grp in df.groupby(["issuer_key", "first_tok", "last_tok"], sort=False):
         if len(grp) < 2:
             continue
         shorts = grp[grp["tokens"].str.len() == 2]
@@ -110,25 +190,35 @@ def build_merge_rules(names: pd.DataFrame) -> tuple[list[MergeRule], pd.DataFram
         valid_until = longs.iloc[1]["first_seen"] if len(longs) > 1 else None
         rules.append(MergeRule(issuer, first_long["name_key"], short["name_key"], valid_from, valid_until))
         if len(longs) > 1:
-            flags.append({"issuer_key": issuer, "name_key": short["name_key"], "flag": "NAME_AMBIGUOUS",
-                          "detail": "; ".join(longs["name_key"]), "from": valid_until})
+            flags.append(
+                {
+                    "issuer_key": issuer,
+                    "name_key": short["name_key"],
+                    "flag": "NAME_AMBIGUOUS",
+                    "detail": "; ".join(longs["name_key"]),
+                    "from": valid_until,
+                }
+            )
     df["folded"] = df["name_key"].map(ascii_fold)
     for (issuer, folded), grp in df.groupby(["issuer_key", "folded"], sort=False):
         if grp["name_key"].nunique() > 1:
-            flags.append({"issuer_key": issuer, "name_key": folded, "flag": "NEAR_DUP_NAME",
-                          "detail": "; ".join(sorted(grp["name_key"].unique())), "from": grp["first_seen"].max()})
+            flags.append(
+                {
+                    "issuer_key": issuer,
+                    "name_key": folded,
+                    "flag": "NEAR_DUP_NAME",
+                    "detail": "; ".join(sorted(grp["name_key"].unique())),
+                    "from": grp["first_seen"].max(),
+                }
+            )
     return rules, pd.DataFrame(flags, columns=["issuer_key", "name_key", "flag", "detail", "from"])
 
 
 def apply_merges(issuer_key: pd.Series, name_key: pd.Series, as_of: pd.Timestamp, rules: list[MergeRule]) -> pd.Series:
-    """person_key al tempo `as_of`: applica solo le regole valide in quell'istante."""
+    """person_key at `as_of`: only the rules valid at that instant are applied."""
     active = {
-        (r.issuer_key, r.long_key): r.short_key
-        for r in rules
-        if r.valid_from <= as_of and (r.valid_until is None or as_of < r.valid_until)
+        (r.issuer_key, r.long_key): r.short_key for r in rules if r.valid_from <= as_of and (r.valid_until is None or as_of < r.valid_until)
     }
     if not active:
         return name_key.copy()
-    return pd.Series(
-        [active.get((i, n), n) for i, n in zip(issuer_key, name_key)], index=name_key.index, dtype="object"
-    )
+    return pd.Series([active.get((i, n), n) for i, n in zip(issuer_key, name_key, strict=True)], index=name_key.index, dtype="object")

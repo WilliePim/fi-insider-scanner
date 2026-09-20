@@ -1,11 +1,11 @@
-"""Sottoscrizione strutturale (ADR-017).
+"""Structural subscription (ADR-017).
 
-- S1: righe Teckning dell'emittente nella finestra -> contesto sottoscrizione (flag)
-- S2: attività su BTA/BTU/diritti/interim -> contesto emissione (flag)
-- S3: >= 3 persone distinte con acquisto base alla stessa data e allo stesso prezzo, E
-      (almeno una riga fuori mercato OPPURE Teckning/strumento di emissione visibile allo
-      stesso prezzo entro 20 giorni) -> sottoscrizione strutturale: score 0, righe fuori da B.
-  Stesso prezzo on-venue senza evidenza di emissione -> solo flag UNIFORM_PRICE_ONVENUE.
+- S1: Teckning rows of the issuer inside the window -> subscription context (flag)
+- S2: activity on BTA/BTU/rights/interim instruments -> issue context (flag)
+- S3: at least 3 distinct persons with a base purchase on the same date at the same price, AND
+      (at least one off-venue row OR a Teckning or issue instrument visible at the same price within
+      20 days) -> a structural subscription: score 0, and those rows stay out of B.
+  The same on-venue price with no evidence of an issue -> only the UNIFORM_PRICE_ONVENUE flag.
 """
 
 from __future__ import annotations
@@ -25,9 +25,20 @@ def issue_rows(v: pd.DataFrame) -> pd.DataFrame:
 
 
 def uniform_price_groups(v: pd.DataFrame, min_persons: int, price_window_days: int) -> pd.DataFrame:
-    """Gruppi (data, prezzo, valuta) con >= min_persons persone; colonne s3, uniform_onvenue, all_board, record_ids."""
+    """Groups (date, price, currency) with at least min_persons persons; columns s3, uniform_onvenue, all_board, record_ids."""
     acq = v[base_purchase(v)]
-    cols = ["trade_date", "price", "currency", "n_persons", "off_venue", "issue_evidence", "s3", "uniform_onvenue", "all_board", "record_ids"]
+    cols = [
+        "trade_date",
+        "price",
+        "currency",
+        "n_persons",
+        "off_venue",
+        "issue_evidence",
+        "s3",
+        "uniform_onvenue",
+        "all_board",
+        "record_ids",
+    ]
     if acq.empty:
         return pd.DataFrame(columns=cols)
     issues = issue_rows(v)

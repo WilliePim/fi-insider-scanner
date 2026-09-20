@@ -1,4 +1,4 @@
-"""Caricamento del registro canonico con valori FX, pronto per gate ed eventi."""
+"""Loading of the canonical register with FX values, ready for gates and events."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ def register(mode: str = "snapshot", timing: str = "pub") -> Register:
 
 
 def canonical_from(path) -> pd.DataFrame:
-    """Registro canonico da un DB diverso da quello pinnato (es. data/fi_refreshed.sqlite)."""
+    """Canonical register from a database other than the pinned one (e.g. data/fi_refreshed.sqlite)."""
     df = store.load_frame("transactions", path)
     return fxmod.attach_values(df, fxmod.load_fx())
 

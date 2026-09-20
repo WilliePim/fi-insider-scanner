@@ -1,11 +1,11 @@
-"""Closed period MAR come attributo (ADR-022): giorni dall'ultimo report noto a `as_of`."""
+"""MAR closed period as an attribute (ADR-022): days from the last known report to `as_of`."""
 
 from __future__ import annotations
 
 import pandas as pd
 
-# Gli emittenti quotati riportano almeno ogni sei mesi: se l'ultima data nota precede T di oltre
-# MAX_REPORT_GAP_DAYS, la lista (Yahoo) e' incompleta e l'attributo va trattato come UNKNOWN (ADR-043).
+# a listed issuer reports at least every six months: when the last known date precedes T by more than
+# MAX_REPORT_GAP_DAYS the (Yahoo) list is incomplete and the attribute must be treated as UNKNOWN (ADR-043)
 MAX_REPORT_GAP_DAYS = 200
 
 

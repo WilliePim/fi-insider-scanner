@@ -1,9 +1,9 @@
 import numpy as np
 import pandas as pd
 import pytest
-from factory import T, register, txn
 
-from fi_insider_scanner.backtest.control import QuietIndex, pick_peer
+from factory import T, register, txn
+from fi_insider_scanner.backtest.control import PeerCandidates, QuietIndex, pick_peer
 from fi_insider_scanner.backtest.events import apply_cooldown
 from fi_insider_scanner.backtest.returns import event_return, monthly_excess
 from fi_insider_scanner.market.mcap import band_label, mcap_at, mcap_panel
@@ -24,7 +24,7 @@ def stock_history(index, closes):
 
 
 def test_excess_return_and_entry_after_publication():
-    # ingresso alla sessione 0, uscita alla sessione 21: il salto deve cadere entro l'uscita
+    # entry at session 0, exit at session 21: the jump has to fall inside the holding window
     bench = bench_series(growth_from=21, step=1.04)
     closes = np.full(len(bench), 10.0)
     closes[21:] = 11.0
@@ -38,7 +38,9 @@ def test_excess_return_and_entry_after_publication():
 
 
 def test_friday_evening_publication_enters_monday_and_holidays_skipped():
-    idx = pd.DatetimeIndex([T("2020-03-19"), T("2020-03-20"), T("2020-03-23"), T("2020-04-09"), T("2020-04-14")]).append(pd.bdate_range("2020-04-15", periods=200))
+    idx = pd.DatetimeIndex([T("2020-03-19"), T("2020-03-20"), T("2020-03-23"), T("2020-04-09"), T("2020-04-14")]).append(
+        pd.bdate_range("2020-04-15", periods=200)
+    )
     bench = pd.Series(100.0, index=idx)
     h = stock_history(idx, np.full(len(idx), 10.0))
     assert event_return(h, bench, T("2020-03-20 18:00"), 2, 5, 5.0).entry_date == T("2020-03-23")
@@ -89,7 +91,11 @@ def test_mcap_point_in_time_and_band():
     assert p.reason == "OK" and p.close_raw_yahoo == pytest.approx(20.0) and p.mcap_sek == pytest.approx(100_000_000.0)
     assert p.price_source == "yahoo_scaled"
     reg = mcap_at(h, shares, T("2019-01-02"), 45, register_price=21.0, register_price_source="register_onvenue")
-    assert reg.mcap_sek == pytest.approx(105_000_000.0) and reg.price_source == "register_onvenue" and reg.close_raw_yahoo == pytest.approx(20.0)
+    assert (
+        reg.mcap_sek == pytest.approx(105_000_000.0)
+        and reg.price_source == "register_onvenue"
+        and reg.close_raw_yahoo == pytest.approx(20.0)
+    )
     after = mcap_at(h, shares, T("2019-02-15"), 45)
     assert after.shares == pytest.approx(10_000_000.0) and after.mcap_sek == pytest.approx(100_000_000.0)
     late = pd.Series([5_000_000.0], index=pd.DatetimeIndex([T("2018-12-20")]))
@@ -111,9 +117,12 @@ def test_peer_selection():
             "band": ["50_300"] * 4,
         }
     )
-    peer = pick_peer("E", 100e6, "50_300", pool, active={"Y"})
-    assert peer["issuer_key"] == "X"  # X e Z a distanza 0,1: vince l'issuer_key minore
-    assert pick_peer("E", 100e6, "gt300", pool, active=set()) is None
+    candidates = PeerCandidates.from_frame(pool)
+    peer = pick_peer("E", 100e6, "50_300", candidates, active={"Y"})
+    assert peer.issuer_key == "X"  # X e Z a distanza 0,1: vince l'issuer_key minore
+    assert peer.symbol == "X.ST"
+    assert pick_peer("E", 100e6, "gt300", candidates, active=set()) is None
+    assert pick_peer("E", 100e6, "50_300", candidates, active={"X", "Y", "Z"}) is None
 
 
 def test_quiet_index_is_point_in_time():

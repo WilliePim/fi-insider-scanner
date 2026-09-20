@@ -71,9 +71,7 @@ def test_middle_name_merge_same_issuer_only():
 
 
 def test_different_first_names_never_merge():
-    rules, _ = build_merge_rules(
-        _names([("I1", "anna svensson", T("2020-01-01")), ("I1", "maria svensson", T("2020-01-01"))])
-    )
+    rules, _ = build_merge_rules(_names([("I1", "anna svensson", T("2020-01-01")), ("I1", "maria svensson", T("2020-01-01"))]))
     assert rules == []
 
 
@@ -96,8 +94,6 @@ def test_ambiguous_long_variants_stop_merging_point_in_time():
 
 
 def test_diacritic_near_duplicates_flagged_not_merged():
-    rules, flags = build_merge_rules(
-        _names([("I1", "per östlund", T("2020-01-01")), ("I1", "per ostlund", T("2020-01-05"))])
-    )
+    rules, flags = build_merge_rules(_names([("I1", "per östlund", T("2020-01-01")), ("I1", "per ostlund", T("2020-01-05"))]))
     assert rules == []
     assert "NEAR_DUP_NAME" in set(flags["flag"])

@@ -74,7 +74,7 @@ def test_deciding_modules_read_register_only_through_visibility():
 
 
 def test_banned_regex_has_word_boundaries():
-    # la parola "consigliere" (membro del consiglio) non deve scattare; "consiglio di comprare" sì
+    # "consigliere" (a board member) must not trigger; "consiglio di comprare" ("I advise buying") must
     assert BANNED_WORDS.search("consigliere dal 2014") is None
     assert BANNED_WORDS.search("vi consiglio di comprare") is not None
     assert BANNED_WORDS.search("Russell 2000") is None

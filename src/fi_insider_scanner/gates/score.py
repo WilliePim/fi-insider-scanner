@@ -1,4 +1,4 @@
-"""Score Layer 1 (ADR-023): somma booleana 0-4, S3 forza 0. Nessun verdetto."""
+"""Layer-1 score (ADR-023): a boolean sum 0-4, forced to 0 by S3. No verdict."""
 
 from __future__ import annotations
 

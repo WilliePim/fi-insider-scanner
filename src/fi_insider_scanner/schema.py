@@ -1,7 +1,7 @@
-"""Schema canonico di una riga del registro (contratto Pydantic).
+"""Canonical schema of a register row (the Pydantic contract).
 
-Campi derivati da più righe (issuer_key, tipo inferito, catene) sono aggiunti dopo,
-a livello di dataset, e documentati in `canon/mapping.py`.
+Fields derived from several rows (issuer_key, inferred type, revision chains) are added afterwards at
+dataset level and documented in `canon/mapping.py`.
 """
 
 from __future__ import annotations
@@ -65,7 +65,7 @@ class Transaction(BaseModel):
     parse_errors: tuple[str, ...]
 
 
-# Colonne aggiunte a livello di dataset (vedi canon/mapping.py e canon/chains.py).
+# Columns added at dataset level (see canon/mapping.py and canon/chains.py).
 DERIVED_COLUMNS = (
     "issuer_key",
     "issuer_key_source",

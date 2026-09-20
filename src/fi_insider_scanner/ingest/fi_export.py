@@ -1,9 +1,9 @@
-"""Client incrementale per l'export CSV di FI (ADR-001). Solo per il caso zero.
+"""Incremental client for FI's own CSV export (ADR-001). Used only for case zero.
 
-Regole: un thread, pausa >= `pause_seconds` tra le richieste, massimo `max_requests` per run,
-User-Agent identificabile, contatto solo da variabile d'ambiente FI_SCANNER_CONTACT.
-L'export tronca in silenzio a `row_cap` righe: ogni finestra di pubblicazione con >= row_cap righe
-viene dimezzata; un singolo giorno che raggiunge il tetto è un errore esplicito, mai un troncamento.
+Rules: one thread, at least `pause_seconds` between requests, at most `max_requests` per run, an
+identifiable User-Agent, and a contact address taken only from the FI_SCANNER_CONTACT environment
+variable. The export silently truncates at `row_cap` rows, so any publication window holding at least
+`row_cap` rows is halved; a single day that reaches the cap is an explicit error, never a silent cut.
 """
 
 from __future__ import annotations
@@ -24,11 +24,11 @@ INITIAL_WINDOW_DAYS = 10
 
 
 class ExportCapError(RuntimeError):
-    """Un singolo giorno di pubblicazione raggiunge il tetto dell'export FI."""
+    """A single publication day hits the FI export row cap."""
 
 
 class RequestBudgetError(RuntimeError):
-    """Superato il numero massimo di richieste per run."""
+    """The per-run request budget is exhausted."""
 
 
 @dataclass
@@ -69,7 +69,7 @@ class HttpFetcher:
 
 
 class FiExportClient:
-    """`fetch(start, end) -> bytes` iniettabile per i test."""
+    """`fetch(start, end) -> bytes` is injectable for the tests."""
 
     def __init__(self, fetch: Callable[[date, date], bytes], pause_seconds: float, max_requests: int, row_cap: int, sleep=time.sleep):
         self.fetch, self.pause, self.max_requests, self.row_cap, self.sleep = fetch, pause_seconds, max_requests, row_cap, sleep
@@ -91,7 +91,7 @@ class FiExportClient:
         return parsed
 
     def fetch_range(self, start: date, end: date) -> list[RawParseResult]:
-        """Finestre iniziali di INITIAL_WINDOW_DAYS, dimezzate finché restano sotto il tetto."""
+        """Windows of INITIAL_WINDOW_DAYS, halved until they stay below the cap."""
         out: list[RawParseResult] = []
         cursor = start
         while cursor <= end:
@@ -111,7 +111,7 @@ class FiExportClient:
 
 
 def merge_window_replace(bulk_rows: pd.DataFrame, fi_rows: pd.DataFrame, start: date, end: date) -> pd.DataFrame:
-    """Le righe FI sostituiscono tutte le righe bulk con pubblicazione nella finestra [start, end]."""
+    """FI rows replace every bulk row published inside the window [start, end]."""
     pub = pd.to_datetime(bulk_rows["Publiceringsdatum"], errors="coerce").dt.normalize()
     keep = bulk_rows[(pub < pd.Timestamp(start)) | (pub > pd.Timestamp(end)) | pub.isna()]
     merged = pd.concat([keep, fi_rows], ignore_index=True)

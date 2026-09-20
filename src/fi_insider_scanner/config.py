@@ -1,4 +1,4 @@
-"""Percorsi del repo e caricamento di config/pipeline.toml."""
+"""Repository paths and loading of config/pipeline.toml."""
 
 from __future__ import annotations
 

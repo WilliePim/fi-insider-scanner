@@ -1,4 +1,4 @@
-"""Criteri di verdetto pre-registrati (ADR-035). Nessuna interpretazione oltre questi."""
+"""Pre-registered verdict criteria (ADR-035). Nothing is read into the numbers beyond them."""
 
 from __future__ import annotations
 
@@ -36,7 +36,13 @@ def decide(primary: Summary, control: Summary | None, s0_mean: float | None, cov
     }
     if coverage < min_coverage:
         return Verdict("INCONCLUSIVO", [f"copertura {coverage:.1%} sotto la soglia {min_coverage:.0%}"], checks)
-    regge = checks["P_media_positiva"] and checks["P_t_cr1_emittente_ge_2"] and checks["C_media_positiva"] and checks["C_t_cr1_emittente_ge_2"] and checks["segno_invariato_S0"]
+    regge = (
+        checks["P_media_positiva"]
+        and checks["P_t_cr1_emittente_ge_2"]
+        and checks["C_media_positiva"]
+        and checks["C_t_cr1_emittente_ge_2"]
+        and checks["segno_invariato_S0"]
+    )
     if regge:
         return Verdict("REGGE", ["tutti i criteri REGGE soddisfatti"], checks)
     reasons = []
@@ -46,5 +52,9 @@ def decide(primary: Summary, control: Summary | None, s0_mean: float | None, cov
         reasons.append("MDE <= 3,5% e CI 95% di P include 0")
     if reasons:
         return Verdict("NON REGGE", reasons, checks)
-    failed = [k for k in ("P_media_positiva", "P_t_cr1_emittente_ge_2", "C_media_positiva", "C_t_cr1_emittente_ge_2", "segno_invariato_S0") if not checks[k]]
+    failed = [
+        k
+        for k in ("P_media_positiva", "P_t_cr1_emittente_ge_2", "C_media_positiva", "C_t_cr1_emittente_ge_2", "segno_invariato_S0")
+        if not checks[k]
+    ]
     return Verdict("INCONCLUSIVO", [f"criterio REGGE non soddisfatto: {k}" for k in failed], checks)

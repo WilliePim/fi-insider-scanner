@@ -1,12 +1,13 @@
-"""Market cap point-in-time (ADR-026).
+"""Point-in-time market cap (ADR-026).
 
-mcap_SEK(d) = azioni(d) * prezzo(d)
-- prezzo(d): per gli eventi, il prezzo di esecuzione in SEK delle righe del registro (reale, alla data);
-  altrimenti Close Yahoo <= d * split_factor_after(d) * scale(d) (ADR-025: fattore di riscalamento stimato dal registro)
-- azioni(d): ultima osservazione `shares_full` con data <= d - lag, portata a d con gli split intermedi.
-  `shares_full` è il totale societario (tutte le classi): per un emittente dual class la mcap usa il prezzo
-  della classe acquistata (dichiarato).
-Nessun forward-fill oltre la data: se manca un pezzo la mcap è None con il motivo.
+mcap_SEK(d) = shares(d) * price(d)
+- price(d): for an event, the SEK execution price of the register rows (real, on that date); otherwise the
+  Yahoo close on or before d * split_factor_after(d) * scale(d) (ADR-025: the rescaling factor estimated
+  from the register)
+- shares(d): the last `shares_full` observation dated no later than d - lag, carried to d through the
+  splits in between. `shares_full` is the company total (every class), so for a dual-class issuer the
+  market cap uses the price of the class that was bought (stated as such).
+No forward-fill beyond the date: when a piece is missing the market cap is None with a reason.
 """
 
 from __future__ import annotations
@@ -16,7 +17,7 @@ from dataclasses import dataclass
 import numpy as np
 import pandas as pd
 
-from .prices import ScaleSegment, scale_at, split_factor_after
+from .prices import ScaleSegment, scale_at, split_factor_after, split_ratios
 
 MAX_PRICE_STALE_DAYS = 10
 
@@ -32,33 +33,47 @@ class McapPoint:
     reason: str
 
 
-def _splits(history: pd.DataFrame | None) -> pd.Series:
-    if history is None or "Stock Splits" not in history:
-        return pd.Series(dtype=float)
-    s = history["Stock Splits"]
-    return s[s.fillna(0) > 0]
+def _asof_position(index: pd.Index, day: pd.Timestamp) -> int:
+    """Position of the last entry on or before `day`, or -1 when there is none."""
+    return int(index.searchsorted(day, side="right")) - 1
 
 
-def shares_at(history: pd.DataFrame | None, shares: pd.Series | None, day: pd.Timestamp, lag_days: int) -> tuple[float | None, pd.Timestamp | None, str]:
+def shares_at(
+    history: pd.DataFrame | None,
+    shares: pd.Series | None,
+    day: pd.Timestamp,
+    lag_days: int,
+    splits: pd.Series | None = None,
+) -> tuple[float | None, pd.Timestamp | None, str]:
+    """Share count usable at `day`: last observation published at least `lag_days` earlier, split-adjusted to `day`."""
     if shares is None or shares.empty:
         return None, None, "NO_SHARES"
-    avail = shares[shares.index <= day - pd.Timedelta(days=lag_days)]
-    if avail.empty:
+    pos = _asof_position(shares.index, day - pd.Timedelta(days=lag_days))
+    if pos < 0:
         return None, None, "SHARES_NOT_YET_PUBLIC"
-    obs_date, obs = avail.index[-1], float(avail.iloc[-1])
-    between = _splits(history)
-    between = between[(between.index > obs_date) & (between.index <= day)]
-    adj = obs * float(np.prod(between.to_numpy(dtype=float))) if not between.empty else obs
-    return adj, obs_date, "OK"
+    obs_date, obs = shares.index[pos], float(shares.iloc[pos])
+    if splits is None:
+        splits = split_ratios(history) if history is not None else pd.Series(dtype=float)
+    between = splits[(splits.index > obs_date) & (splits.index <= day)]
+    return (obs * float(np.prod(between.to_numpy(dtype=float))) if len(between) else obs), obs_date, "OK"
 
 
-def yahoo_close_raw(history: pd.DataFrame | None, day: pd.Timestamp, segments: list[ScaleSegment] | None = None) -> float | None:
+def yahoo_close_raw(
+    history: pd.DataFrame | None,
+    day: pd.Timestamp,
+    segments: list[ScaleSegment] | None = None,
+    splits: pd.Series | None = None,
+) -> float | None:
+    """Yahoo close reconstructed to the price actually paid that day (splits and rescaling undone)."""
     if history is None or history.empty:
         return None
-    upto = history[history.index <= day]
-    if upto.empty or (day - upto.index[-1]).days > MAX_PRICE_STALE_DAYS:
+    pos = _asof_position(history.index, day)
+    if pos < 0 or (day - history.index[pos]).days > MAX_PRICE_STALE_DAYS:
         return None
-    return float(upto["Close"].iloc[-1]) * float(split_factor_after(history, pd.Series([day]))[0]) * float(scale_at(segments or [], pd.Series([day]))[0])
+    if splits is None:
+        splits = split_ratios(history)
+    factor = float(np.prod(splits[splits.index > day].to_numpy(dtype=float))) if len(splits) else 1.0
+    return float(history["Close"].to_numpy()[pos]) * factor * float(scale_at(segments or [], pd.Series([day]))[0])
 
 
 def mcap_at(
@@ -69,9 +84,13 @@ def mcap_at(
     register_price: float | None = None,
     register_price_source: str | None = None,
     segments: list[ScaleSegment] | None = None,
+    splits: pd.Series | None = None,
 ) -> McapPoint:
+    """Market cap at `day`; `splits` may be passed precomputed to avoid rescanning the price history."""
     day = pd.Timestamp(day).normalize()
-    yahoo = yahoo_close_raw(history, day, segments)
+    if splits is None and history is not None:
+        splits = split_ratios(history)
+    yahoo = yahoo_close_raw(history, day, segments, splits)
     if register_price is not None and register_price > 0:
         price, source = float(register_price), register_price_source or "register"
     elif yahoo is not None and yahoo > 0:
@@ -79,7 +98,7 @@ def mcap_at(
     else:
         reason = "NO_PRICE_AT_DATE" if history is not None and not history.empty else "NO_HISTORY"
         return McapPoint(None, None, None, None, None, yahoo, reason)
-    adj, obs_date, reason = shares_at(history, shares, day, lag_days)
+    adj, obs_date, reason = shares_at(history, shares, day, lag_days, splits)
     if adj is None:
         return McapPoint(None, None, None, price, source, yahoo, reason)
     if not adj > 0:
@@ -87,8 +106,14 @@ def mcap_at(
     return McapPoint(adj * price, adj, obs_date, price, source, yahoo, "OK")
 
 
-def mcap_panel(history: pd.DataFrame | None, shares: pd.Series | None, days: pd.DatetimeIndex, lag_days: int, segments: list[ScaleSegment] | None = None) -> np.ndarray:
-    """Versione vettoriale su molte date (pool del matched control), prezzo Yahoo riscalato."""
+def mcap_panel(
+    history: pd.DataFrame | None,
+    shares: pd.Series | None,
+    days: pd.DatetimeIndex,
+    lag_days: int,
+    segments: list[ScaleSegment] | None = None,
+) -> np.ndarray:
+    """Vectorised version over many dates (the matched-control pool), on the rescaled Yahoo price."""
     out = np.full(len(days), np.nan)
     if history is None or history.empty or shares is None or shares.empty or len(days) == 0:
         return out

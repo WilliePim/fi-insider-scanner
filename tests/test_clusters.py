@@ -1,5 +1,4 @@
 from factory import T, register, txn
-
 from fi_insider_scanner.gates.clusters import detect_clusters
 
 CFG = {

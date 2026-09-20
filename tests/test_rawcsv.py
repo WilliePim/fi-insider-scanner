@@ -15,7 +15,7 @@ ROW_C = ROW_A.replace("10000,0", "500,0")
 
 
 def _csv(*lines: str, eol: str = "\r\n") -> bytes:
-    return (eol.join((HEADER,) + lines) + eol).encode("utf-8")
+    return (eol.join((HEADER, *lines)) + eol).encode("utf-8")
 
 
 def test_header_drift_raises():

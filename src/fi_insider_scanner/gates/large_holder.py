@@ -1,12 +1,11 @@
-"""Grande azionista e acquisto simbolico (ADR-012, ADR-020).
+"""Large holder and symbolic purchase (ADR-012, ADR-020).
 
-MAR art. 19 non copre i detentori >10%, quindi il registro non può dire "non è grande
-azionista". Il flag vale "true" (parola chiave nel ruolo, oppure posizione minima visibile
->= 10% delle azioni) oppure "unknown": mai "false".
+MAR art. 19 does not cover holders above 10%, so the register can never say "not a large holder". The flag
+is "true" (a keyword in the role, or a minimum visible position of at least 10% of the shares) or
+"unknown": never "false".
 
-`position_lb` = somma netta dei volumi azionari visibili della persona (veicoli inclusi)
-dal 2016-07: è un limite inferiore della posizione vera, perché gli acquisti precedenti al
-registro non si vedono.
+`position_lb` = the net sum of the person's visible share volumes, vehicles included, since 2016-07. It is
+a lower bound on the true position, because purchases predating the register are invisible.
 """
 
 from __future__ import annotations
@@ -32,7 +31,7 @@ def large_holder(v: pd.DataFrame, person_key: str, shares_outstanding: float | N
 
 
 def symbolic_purchase(v_before: pd.DataFrame, person_key: str, volume: float, max_change: float) -> str:
-    """True se il limite superiore della variazione % (volume / posizione minima) è sotto la soglia."""
+    """True when the upper bound of the position change (volume / minimum position) is below the threshold."""
     lb = position_lb(v_before, person_key)
     if lb <= 0:
         return "unknown"

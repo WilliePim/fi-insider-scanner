@@ -23,7 +23,7 @@ def row(day: str, person: str = "Anna Svensson") -> str:
 
 
 def export_bytes(rows: list[str]) -> bytes:
-    return ("\r\n".join([HEADER] + rows) + "\r\n").encode("utf-16-le")
+    return ("\r\n".join([HEADER, *rows]) + "\r\n").encode("utf-16-le")
 
 
 class FakeFI:
@@ -80,7 +80,9 @@ def test_request_budget():
 
 
 def test_merge_window_replace():
-    bulk = parse_register_csv(("\r\n".join([HEADER, row("2026-05-01"), row("2026-06-05"), row("2026-06-20")]) + "\r\n").encode("utf-16-le")).rows
+    bulk = parse_register_csv(
+        ("\r\n".join([HEADER, row("2026-05-01"), row("2026-06-05"), row("2026-06-20")]) + "\r\n").encode("utf-16-le")
+    ).rows
     fi = parse_register_csv(export_bytes([row("2026-06-05", "Erik Berg"), row("2026-06-06")])).rows
     merged = merge_window_replace(bulk, fi, date(2026, 6, 1), date(2026, 6, 10))
     days = sorted(merged["Publiceringsdatum"].str.slice(0, 10))

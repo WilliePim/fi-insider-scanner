@@ -1,7 +1,7 @@
-"""Snapshot bulk dal repo civictech, pinnato a un commit upstream.
+"""Bulk snapshot from the civictech repository, pinned to an upstream commit.
 
-Scarica il file al commit esatto (non a `main`), così lo snapshot è riproducibile e
-il suo sha256 può entrare nella pre-registrazione.
+The file is fetched at that exact commit rather than at `main`, so the snapshot is reproducible and its
+sha256 can go into the pre-registration.
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ import hashlib
 import json
 import urllib.request
 from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from .. import config
@@ -67,7 +67,7 @@ def download(commit_sha: str | None = None) -> Snapshot:
         commit_date=commit_date,
         sha256=digest,
         n_bytes=len(data),
-        fetched_at=datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        fetched_at=datetime.now(UTC).isoformat(timespec="seconds"),
         path=out.relative_to(config.REPO_ROOT).as_posix(),
     )
     out.with_suffix("").with_suffix(".json").write_text(json.dumps(asdict(snap), indent=2), encoding="utf-8")

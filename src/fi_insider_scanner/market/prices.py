@@ -1,11 +1,11 @@
-"""Prezzi raw, fattori di scala Yahoo e verifica di un ticker contro i prezzi del registro (ADR-024, ADR-025).
+"""Raw prices, Yahoo scale factors, and verification of a ticker against the register's prices (ADR-024, ADR-025).
 
-Yahoo restituisce OHLC aggiustati per split (auto_adjust=False non toglie gli split). Per molti titoli di
-Stoccolma la storia precedente a un'emissione di diritti o a uno spin-off è inoltre riscalata di un fattore
-costante che NON compare in `Stock Splits` (verificato: Securitas 1,20x prima dell'ottobre 2022, Dustin 2,0x
-prima del 2023, Scandic 1,4x prima del 2021, Sandvik 1,05x prima dello spin-off Alleima). Il registro FI
-contiene prezzi di esecuzione reali: il rapporto prezzo registro / Close Yahoo, per tratti costante, stima
-quel fattore. prezzo raw(d) = Close(d) * split_factor_after(d) * scale(d).
+Yahoo returns OHLC adjusted for splits (auto_adjust=False does not undo them). For many Stockholm issues
+the history before a rights issue or a spin-off is additionally rescaled by a constant factor that does
+NOT appear in `Stock Splits` (verified: Securitas 1.20x before October 2022, Dustin 2.0x before 2023,
+Scandic 1.4x before 2021, Sandvik 1.05x before the Alleima spin-off). The FI register holds real execution
+prices, and the ratio register price / Yahoo close, piecewise constant, estimates that factor:
+raw price(d) = Close(d) * split_factor_after(d) * scale(d).
 """
 
 from __future__ import annotations
@@ -19,9 +19,15 @@ SCALE_TOL = 0.03
 RECENT_ROWS = 20
 
 
-def split_factor_after(history: pd.DataFrame, dates: pd.Series) -> np.ndarray:
+def split_ratios(history: pd.DataFrame) -> pd.Series:
+    """Non-zero split ratios of a price history, in date order."""
     splits = history["Stock Splits"] if "Stock Splits" in history else pd.Series(dtype=float)
-    splits = splits[splits.fillna(0) > 0]
+    return splits[splits.fillna(0) > 0]
+
+
+def split_factor_after(history: pd.DataFrame, dates: pd.Series) -> np.ndarray:
+    """Product of the split ratios strictly after each date: raw price = Yahoo close x factor."""
+    splits = split_ratios(history)
     if splits.empty:
         return np.ones(len(dates))
     s_dates = splits.index.to_numpy()
@@ -32,7 +38,7 @@ def split_factor_after(history: pd.DataFrame, dates: pd.Series) -> np.ndarray:
 
 
 def ratio_table(history: pd.DataFrame, trades: pd.DataFrame) -> pd.DataFrame:
-    """Per ogni riga del registro con bar Yahoo lo stesso giorno: prezzo, Low/High/Close split-adjusted raw, rapporto."""
+    """For every register row with a Yahoo bar on the same day: price, split-adjusted raw Low/High/Close, ratio."""
     t = trades.dropna(subset=["trade_date", "price"])
     t = t[(t["price"] > 0) & t["trade_date"].isin(history.index)].sort_values("trade_date")
     if t.empty:
@@ -61,7 +67,7 @@ class ScaleSegment:
 
 
 def estimate_scale_segments(history: pd.DataFrame, trades: pd.DataFrame, tol: float = SCALE_TOL, min_rows: int = 3) -> list[ScaleSegment]:
-    """Tratti (per anno, poi fusi se compatibili) con fattore = mediana(prezzo registro / Close Yahoo)."""
+    """Segments (by year, then merged when compatible) with factor = median(register price / Yahoo close)."""
     rt = ratio_table(history, trades).dropna(subset=["ratio"])
     if len(rt) < min_rows:
         return []
@@ -69,7 +75,15 @@ def estimate_scale_segments(history: pd.DataFrame, trades: pd.DataFrame, tol: fl
     groups = []
     for _, g in rt.groupby("year"):
         if len(g) >= 2:
-            groups.append([pd.Timestamp(g["trade_date"].min()), pd.Timestamp(g["trade_date"].max()), float(g["ratio"].median()), int(len(g)), list(g["ratio"])])
+            groups.append(
+                [
+                    pd.Timestamp(g["trade_date"].min()),
+                    pd.Timestamp(g["trade_date"].max()),
+                    float(g["ratio"].median()),
+                    len(g),
+                    list(g["ratio"]),
+                ]
+            )
     if not groups:
         return []
     merged = [groups[0]]
@@ -84,7 +98,7 @@ def estimate_scale_segments(history: pd.DataFrame, trades: pd.DataFrame, tol: fl
 
 
 def scale_at(segments: list[ScaleSegment], dates: pd.Series) -> np.ndarray:
-    """Fattore del tratto che contiene la data; fuori dai tratti, quello del tratto più vicino; 1,0 senza tratti."""
+    """Factor of the segment holding that date; outside the segments, the nearest one's; 1.0 without segments."""
     d = pd.to_datetime(pd.Series(dates)).to_numpy()
     out = np.ones(len(d))
     if not segments:
@@ -97,7 +111,9 @@ def scale_at(segments: list[ScaleSegment], dates: pd.Series) -> np.ndarray:
         if len(inside):
             out[i] = factors[inside[0]]
             continue
-        dist = np.minimum(np.abs((starts - day).astype("timedelta64[D]").astype(int)), np.abs((ends - day).astype("timedelta64[D]").astype(int)))
+        dist = np.minimum(
+            np.abs((starts - day).astype("timedelta64[D]").astype(int)), np.abs((ends - day).astype("timedelta64[D]").astype(int))
+        )
         out[i] = factors[int(dist.argmin())]
     return out
 
@@ -124,10 +140,13 @@ class Verification:
     segments: tuple = field(default_factory=tuple)
 
 
-def verify_against_register(history: pd.DataFrame | None, trades: pd.DataFrame, tolerance: float, min_rows: int, min_share: float, recent_rows: int = RECENT_ROWS) -> Verification:
-    """`trades`: colonne trade_date, price (SEK). Verificato se il prezzo cade in [Low, High] raw ±tol
-    per >= min_share delle ultime `recent_rows` righe (la coda della storia non è riscalata da Yahoo),
-    oppure di tutte le righe. Il riscalamento dei tratti precedenti è registrato, non penalizzato."""
+def verify_against_register(
+    history: pd.DataFrame | None, trades: pd.DataFrame, tolerance: float, min_rows: int, min_share: float, recent_rows: int = RECENT_ROWS
+) -> Verification:
+    """`trades`: columns trade_date, price (SEK). Verified when the price falls inside the raw [Low, High] ±tol
+    for at least `min_share` of the last `recent_rows` rows (Yahoo does not rescale the tail of a history), or
+    of all the rows. Rescaling of the earlier segments is recorded, not penalised.
+    """
     if history is None or history.empty:
         return Verification(False, 0, None, None, None, "NO_HISTORY")
     rt = ratio_table(history, trades)

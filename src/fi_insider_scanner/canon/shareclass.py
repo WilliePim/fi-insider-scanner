@@ -1,4 +1,4 @@
-"""Classe azioni da `Instrumentnamn`. L'identità dello strumento resta l'ISIN."""
+"""Share class from `Instrumentnamn`. The instrument identity stays the ISIN."""
 
 from __future__ import annotations
 
@@ -45,7 +45,7 @@ def parse_share_class(name: str | None) -> ShareClassInfo:
             stripped = rx.sub("", stripped)
         stripped = re.sub(r"\s+", " ", stripped).strip(" ,.-")
         m = _TRAILING.search(stripped)
-        # Una lettera finale in maiuscolo dopo almeno una parola (evita "AB" e simili).
+        # a single trailing capital after at least one word (keeps "AB" and friends out)
         if m and len(stripped) > 2 and stripped[-1].isupper():
             share_class = m.group(1)
     return ShareClassInfo(share_class=share_class, is_pref=is_pref, is_sdr=is_sdr, type_hint=hint)

@@ -1,11 +1,12 @@
-"""Refresh FI per il caso zero (ADR-001, ADR-002): export incrementale + merge window-replace + ricostruzione canonica
-in un DB separato (`data/fi_refreshed.sqlite`). Il DB pinnato del backtest non viene toccato."""
+"""FI refresh for case zero (ADR-001, ADR-002): incremental export, window-replace merge and a canonical
+rebuild in a separate database (`data/fi_refreshed.sqlite`). The pinned backtest database is never touched.
+"""
 
 from __future__ import annotations
 
 import gzip
 import json
-from datetime import date, datetime, timedelta, timezone
+from datetime import UTC, date, datetime, timedelta
 
 import pandas as pd
 
@@ -34,7 +35,7 @@ def refresh(lookback_days: int, end: date | None = None, fetcher=None) -> dict:
 
     out_dir = config.RAW_DIR / "fi"
     out_dir.mkdir(parents=True, exist_ok=True)
-    stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ")
     with gzip.open(out_dir / f"{stamp}_{start}_{end}.csv.gz", "wt", encoding="utf-8") as f:
         fi_rows.to_csv(f, sep=";", index=False)
     (out_dir / f"{stamp}_fetchlog.json").write_text(json.dumps(client.log.requests, indent=2), encoding="utf-8")
@@ -48,16 +49,20 @@ def refresh(lookback_days: int, end: date | None = None, fetcher=None) -> dict:
     store.save_frame("transactions", c.df, REFRESHED_DB)
     store.save_frame("quarantine", pd.concat([raw.quarantine, fi_quarantine], ignore_index=True), REFRESHED_DB)
     store.save_rules(c.rules, REFRESHED_DB)
-    replaced = int(((pd.to_datetime(raw.rows["Publiceringsdatum"], errors="coerce").dt.normalize() >= pd.Timestamp(start))
-                    & (pd.to_datetime(raw.rows["Publiceringsdatum"], errors="coerce").dt.normalize() <= pd.Timestamp(end))).sum())
+    replaced = int(
+        (
+            (pd.to_datetime(raw.rows["Publiceringsdatum"], errors="coerce").dt.normalize() >= pd.Timestamp(start))
+            & (pd.to_datetime(raw.rows["Publiceringsdatum"], errors="coerce").dt.normalize() <= pd.Timestamp(end))
+        ).sum()
+    )
     summary = {
         "window": [str(start), str(end)],
         "requests": len(client.log.requests),
-        "fi_rows": int(len(fi_rows)),
+        "fi_rows": len(fi_rows),
         "bulk_rows_replaced": replaced,
-        "rows_total": int(len(c.df)),
+        "rows_total": len(c.df),
         "stale_inferred": int((c.df["chain_status"] == "superseded_inferred").sum()),
-        "fi_quarantine": int(len(fi_quarantine)),
+        "fi_quarantine": len(fi_quarantine),
         "status_fi_rows": fi_rows["Status"].value_counts().to_dict(),
         "fetched_at": stamp,
     }

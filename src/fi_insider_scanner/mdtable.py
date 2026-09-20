@@ -1,4 +1,4 @@
-"""Tabelle markdown senza dipendenze (niente `tabulate`)."""
+"""Markdown tables with no dependency (no `tabulate`)."""
 
 from __future__ import annotations
 

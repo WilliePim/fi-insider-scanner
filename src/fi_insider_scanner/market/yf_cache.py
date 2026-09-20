@@ -1,7 +1,7 @@
-"""Cache immutabile su disco delle chiamate yfinance (ADR-025).
+"""Immutable on-disk cache of the yfinance calls (ADR-025).
 
-Una sola chiamata di rete per ticker e tipo: poi si legge dal disco. Una risposta vuota
-viene registrata come vuota (marker), così non si ripete. Pausa fissa tra chiamate di rete.
+One network call per ticker and kind, then everything is read from disk. An empty response is recorded as
+empty (a marker), so it is never repeated. A fixed pause separates the network calls.
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ def _empty_marker(p: Path) -> Path:
 
 
 def history(ticker: str, start: str = "2015-01-01") -> pd.DataFrame | None:
-    """OHLC non aggiustati per dividendi (auto_adjust=False), con Adj Close, Dividends, Stock Splits."""
+    """OHLC not adjusted for dividends (auto_adjust=False), with Adj Close, Dividends and Stock Splits."""
     p = _path("history", ticker)
     if p.exists():
         df = pd.read_csv(p, parse_dates=["Date"], index_col="Date")
@@ -55,7 +55,7 @@ def history(ticker: str, start: str = "2015-01-01") -> pd.DataFrame | None:
     _pause()
     try:
         df = _yf().Ticker(ticker).history(start=start, auto_adjust=False, actions=True, repair=False, raise_errors=False)
-    except Exception:  # noqa: BLE001 - yfinance solleva eccezioni eterogenee
+    except Exception:
         df = None
     if df is None or df.empty:
         _empty_marker(p).touch()
@@ -77,7 +77,7 @@ def shares_full(ticker: str, start: str = "2015-01-01") -> pd.Series | None:
     _pause()
     try:
         s = _yf().Ticker(ticker).get_shares_full(start=start)
-    except Exception:  # noqa: BLE001
+    except Exception:
         s = None
     if s is None or len(s) == 0:
         _empty_marker(p).touch()
@@ -99,7 +99,7 @@ def earnings_dates(ticker: str) -> pd.DatetimeIndex | None:
     _pause()
     try:
         ed = _yf().Ticker(ticker).get_earnings_dates(limit=100)
-    except Exception:  # noqa: BLE001
+    except Exception:
         ed = None
     if ed is None or len(ed) == 0:
         _empty_marker(p).touch()
@@ -119,9 +119,12 @@ def search_isin(isin: str) -> list[dict]:
     _pause()
     try:
         quotes = _yf().Search(isin, max_results=8, news_count=0).quotes
-    except Exception:  # noqa: BLE001
+    except Exception:
         quotes = []
-    rows = [{"symbol": q.get("symbol"), "exchange": q.get("exchange"), "shortname": q.get("shortname"), "quoteType": q.get("quoteType")} for q in quotes]
+    rows = [
+        {"symbol": q.get("symbol"), "exchange": q.get("exchange"), "shortname": q.get("shortname"), "quoteType": q.get("quoteType")}
+        for q in quotes
+    ]
     if not rows:
         _empty_marker(p).touch()
         return []
@@ -139,9 +142,12 @@ def search_text(text: str) -> list[dict]:
     _pause()
     try:
         quotes = _yf().Search(text, max_results=8, news_count=0).quotes
-    except Exception:  # noqa: BLE001
+    except Exception:
         quotes = []
-    rows = [{"symbol": q.get("symbol"), "exchange": q.get("exchange"), "shortname": q.get("shortname"), "quoteType": q.get("quoteType")} for q in quotes]
+    rows = [
+        {"symbol": q.get("symbol"), "exchange": q.get("exchange"), "shortname": q.get("shortname"), "quoteType": q.get("quoteType")}
+        for q in quotes
+    ]
     if not rows:
         _empty_marker(p).touch()
         return []

@@ -1,11 +1,11 @@
-"""Statistica degli eventi (ADR-030). Tutte le formule sono esplicite.
+"""Event statistics (ADR-030). Every formula is spelled out.
 
-- t iid = media / (sd / sqrt(n)), sd campionaria (n-1)
-- CR1 (media come regressione sulla costante, cluster g): V = G/(G-1) * sum_g (sum_{i in g} e_i)^2 / n^2,
-  e_i = x_i - media; t = media / sqrt(V). None se G < min_groups.
-- two-way (emittente, mese): V = V_1 + V_2 - V_12 (V_12 sui cluster intersezione); None se V <= 0.
-- bootstrap percentile 95% sugli eventi, seed fisso.
-- MDE (alpha 5% bilaterale, potenza 80%) = (1,96 + 0,8416) * sd / sqrt(n).
+- iid t = mean / (sd / sqrt(n)), sample sd (n-1)
+- CR1 (the mean as a regression on a constant, cluster g): V = G/(G-1) * sum_g (sum_{i in g} e_i)^2 / n^2,
+  with e_i = x_i - mean; t = mean / sqrt(V). None when G < min_groups.
+- two-way (issuer, month): V = V_1 + V_2 - V_12, V_12 over the intersection clusters; None when V <= 0.
+- percentile bootstrap 95% over the events, fixed seed.
+- MDE (alpha 5% two-sided, power 80%) = (1.96 + 0.8416) * sd / sqrt(n).
 """
 
 from __future__ import annotations
@@ -64,7 +64,7 @@ def t_two_way(x, groups1, groups2, min_groups: int = 10) -> float | None:
     e = a - a.mean()
     v1, n1 = _cr1_var(e, g1)
     v2, n2 = _cr1_var(e, g2)
-    v12, _ = _cr1_var(e, np.array([f"{p}|{q}" for p, q in zip(g1, g2)]))
+    v12, _ = _cr1_var(e, np.array([f"{p}|{q}" for p, q in zip(g1, g2, strict=True)]))
     if min(n1, n2) < min_groups:
         return None
     var = v1 + v2 - v12
@@ -90,14 +90,14 @@ def mde(sd: float | None, n: int) -> float | None:
 
 
 def calendar_time_t(monthly: pd.DataFrame) -> tuple[float | None, int]:
-    """`monthly`: colonne month, excess (rendimento in eccesso di un evento in quel mese).
+    """`monthly`: columns month, excess (one event's excess return in that month).
 
-    Portafoglio equal-weight per mese di calendario, poi t iid sulla serie mensile.
+    Equal-weight portfolio per calendar month, then an iid t on the monthly series.
     """
     if monthly.empty:
         return None, 0
     series = monthly.groupby("month")["excess"].mean()
-    return t_iid(series.to_numpy()), int(len(series))
+    return t_iid(series.to_numpy()), len(series)
 
 
 @dataclass
@@ -143,6 +143,6 @@ def summarize(values, issuers, months, draws: int = 1000, seed: int = 12345, min
         ci_low=lo,
         ci_high=hi,
         mde=mde(sd, n),
-        n_issuers=int(len(set(iss))),
-        n_months=int(len(set(mon))),
+        n_issuers=len(set(iss)),
+        n_months=len(set(mon)),
     )

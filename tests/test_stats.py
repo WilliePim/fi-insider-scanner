@@ -16,7 +16,7 @@ def test_t_iid_known_value():
 def test_singleton_clusters_close_to_iid_scaled():
     x = np.array([0.05, -0.02, 0.10, 0.03, 0.07, -0.01, 0.04, 0.02, 0.06, 0.00, 0.08, 0.01])
     groups = np.arange(len(x))
-    # con cluster singoli CR1 = G/(G-1) * sum e^2 / n^2 = varianza iid (ddof=1) / n
+    # with singleton clusters CR1 = G/(G-1) * sum e^2 / n^2 = the iid variance (ddof=1) / n
     assert t_cluster(x, groups, min_groups=10) == pytest.approx(t_iid(x), rel=1e-9)
 
 

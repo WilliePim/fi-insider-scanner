@@ -1,11 +1,11 @@
-"""Riga grezza -> `Transaction`, poi passi a livello di dataset.
+"""Raw row -> `Transaction`, followed by the dataset-level steps.
 
-Passi di dataset (ognuno con la sua fonte registrata):
-1. `issuer_key`: LEI; altrimenti LEI univoco delle altre righe con lo stesso ISIN; altrimenti
-   LEI univoco delle righe con lo stesso nome normalizzato; altrimenti `name:<nome>`.
-2. `instrument_type`: dichiarato; altrimenti tipo univoco dello stesso ISIN; altrimenti regola
-   sul nome; altrimenti nome dello strumento che richiama l'emittente (-> azione); altrimenti None.
-3. catene di revisione (`canon/chains.py`).
+Dataset steps (each one records its own source):
+1. `issuer_key`: the LEI; else the unique LEI of the other rows with the same ISIN; else the unique LEI of
+   the rows with the same normalised name; else `name:<name>`.
+2. `instrument_type`: as reported; else the unique type of the same ISIN; else a rule on the instrument
+   name; else an instrument name echoing the issuer (-> share); else None.
+3. revision chains (`canon/chains.py`).
 """
 
 from __future__ import annotations
@@ -64,7 +64,11 @@ def map_row(raw: Mapping[str, str], source: str, snapshot_id: str) -> Transactio
         errors.append(f"LEI_FORMAT:{lei!r}")
     isin = text("ISIN") or None
     status_text = text("Status")
-    status = status_text if status_text in ("Aktuell", "Reviderad", "Makulerad") else {"Current": "Aktuell", "Revised": "Reviderad"}.get(status_text)
+    status = (
+        status_text
+        if status_text in ("Aktuell", "Reviderad", "Makulerad")
+        else {"Current": "Aktuell", "Revised": "Reviderad"}.get(status_text)
+    )
     if status is None:
         errors.append(f"STATUS:{status_text!r}")
     currency = currency_code(text("Valuta"))
@@ -144,9 +148,11 @@ def map_rows(raw_rows: pd.DataFrame, source: str, snapshot_id: str) -> tuple[pd.
     df = pd.DataFrame(mapped)
     df["published_at"] = pd.to_datetime(df["published_at"])
     df["trade_date"] = pd.to_datetime(df["trade_date"])
-    # pandas 3 memorizza i None delle colonne stringa come NaN: mai convertirli in "nan".
+    # pandas 3 stores the None of a string column as NaN: never turn those into "nan"
     for col in ("txn_kind", "venue_class", "instrument_type_reported"):
-        df[col] = pd.Series([None if v is None or (isinstance(v, float) and pd.isna(v)) else str(v) for v in df[col]], index=df.index, dtype="object")
+        df[col] = pd.Series(
+            [None if v is None or (isinstance(v, float) and pd.isna(v)) else str(v) for v in df[col]], index=df.index, dtype="object"
+        )
     return df, pd.DataFrame(rejects, columns=["record_id", "error"])
 
 
@@ -217,10 +223,10 @@ ISIN_MAJORITY_SHARE = 0.90
 
 
 def infer_instrument_types(df: pd.DataFrame) -> pd.DataFrame:
-    """Livelli: reported -> isin_rows (unanime) -> isin_majority (>= 90%) -> name_rule -> issuer_name_match -> none.
+    """Levels: reported -> isin_rows (unanimous) -> isin_majority (>= 90%) -> name_rule -> issuer_name_match -> none.
 
-    Un ISIN tipizzato in modo discordante dai dichiaranti (es. 95% Aktie, 5% Option) prende il
-    tipo dominante solo se copre almeno il 90% delle righe tipizzate; altrimenti null + conflitto.
+    An ISIN typed inconsistently by the filers (say 95% Aktie, 5% Option) takes the dominant type only when
+    that type covers at least 90% of the typed rows; otherwise null plus a conflict.
     """
     from collections import Counter
 
@@ -228,13 +234,13 @@ def infer_instrument_types(df: pd.DataFrame) -> pd.DataFrame:
     reported = list(df["instrument_type_reported"])
     isins = list(df["isin"])
     typed: dict[str, Counter] = {}
-    for isin, t in zip(isins, reported):
+    for isin, t in zip(isins, reported, strict=True):
         if _present(isin) and _present(t):
             typed.setdefault(isin, Counter())[t] += 1
 
     name_cache: dict[str, str | None] = {}
     types, sources, conflicts = [], [], []
-    for t, isin, name, issuer, valid in zip(reported, isins, df["instrument_name"], df["issuer_name_raw"], df["isin_valid"]):
+    for t, isin, name, issuer, valid in zip(reported, isins, df["instrument_name"], df["issuer_name_raw"], df["isin_valid"], strict=True):
         if _present(t):
             types.append(t), sources.append("reported"), conflicts.append(False)
             continue

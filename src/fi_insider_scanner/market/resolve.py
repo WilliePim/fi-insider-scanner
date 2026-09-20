@@ -1,10 +1,9 @@
-"""ISIN azionario -> ticker Yahoo `.ST`, sempre verificato sui prezzi del registro (ADR-024).
+"""Share ISIN -> Yahoo `.ST` ticker, always verified against the register's own prices (ADR-024).
 
-Ordine dei candidati: lista Nasdaq Nordic (attivi) -> yf.Search(ISIN) -> ricerca per nome.
-Un candidato è accettato solo se i prezzi degli acquisti/vendite on-venue in SEK del registro
-cadono nel [Low, High] raw di Yahoo (±tolleranza) per almeno l'80% di almeno 3 righe.
-Con meno di 3 righe il ticker `.ST` resta `verified=None` (usabile, segnalato).
-Quotazioni solo estere: rifiutate. Nessun ticker viene indovinato.
+Candidate order: the Nasdaq Nordic list (active issues) -> yf.Search(ISIN) -> a search by name.
+A candidate is accepted only when the SEK prices of the register's on-venue trades fall inside Yahoo's raw
+[Low, High] (within tolerance) for at least 80% of at least 3 rows. With fewer than 3 rows a `.ST` ticker
+stays `verified=None`: usable, and flagged. Foreign-only listings are rejected. No ticker is ever guessed.
 """
 
 from __future__ import annotations
@@ -95,9 +94,24 @@ def resolve_isin(isin: str, issuer_key: str, issuer_name: str, trades: pd.DataFr
     def done(found) -> Resolution:
         symbol, method, ver, hist = found
         segs = ";".join(f"{sg.start.date()}..{sg.end.date()}:{sg.factor:.4f}:{sg.n}" for sg in ver.segments)
-        return Resolution(isin, issuer_key, issuer_name, symbol, method, ver.verified, ver.n_checked, ver.share_in_range,
-                          ver.share_in_range_recent, ver.median_ratio, ver.reason, ver.adjusted_history, segs, ";".join(tried),
-                          str(hist.index.min().date()), str(hist.index.max().date()))
+        return Resolution(
+            isin,
+            issuer_key,
+            issuer_name,
+            symbol,
+            method,
+            ver.verified,
+            ver.n_checked,
+            ver.share_in_range,
+            ver.share_in_range_recent,
+            ver.median_ratio,
+            ver.reason,
+            ver.adjusted_history,
+            segs,
+            ";".join(tried),
+            str(hist.index.min().date()),
+            str(hist.index.max().date()),
+        )
 
     if isin in nasdaq_map:
         found = attempt(nasdaq_map[isin], "nasdaq_list")
@@ -133,8 +147,8 @@ def resolve_all(
 ) -> pd.DataFrame:
     universe = share_isin_universe(df)
     trades = verification_trades(df)
-    by_isin = {k: g for k, g in trades.groupby("isin")}
-    nasdaq_map = dict(zip(nasdaq["isin"], nasdaq["yahoo"])) if not nasdaq.empty else {}
+    by_isin = dict(trades.groupby("isin").__iter__())
+    nasdaq_map = dict(zip(nasdaq["isin"], nasdaq["yahoo"], strict=True)) if not nasdaq.empty else {}
     already = set(done["isin"]) if done is not None and not done.empty else set()
     out = [] if done is None else done.drop_duplicates("isin").to_dict("records")
     empty = trades.iloc[:0]

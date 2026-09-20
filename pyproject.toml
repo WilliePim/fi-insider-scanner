@@ -1,7 +1,7 @@
 [project]
 name = "fi-insider-scanner"
 version = "0.1.0"
-description = "Insider svedesi da FI Insynsregistret: ingest canonico, gate Layer 1, backtest event-time, dossier."
+description = "Swedish PDMR register (FI Insynsregistret): canonical ingest, Layer-1 gates, pre-registered event-time backtest, dossier."
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
@@ -15,7 +15,7 @@ dependencies = [
 fi-scan = "fi_insider_scanner.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8"]
+dev = ["pytest>=8", "ruff>=0.14"]
 
 [build-system]
 requires = ["hatchling"]
@@ -26,5 +26,26 @@ packages = ["src/fi_insider_scanner"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = ["snapshot: richiede lo snapshot dati in data/ (e rete per i dati di mercato)"]
+markers = ["snapshot: needs the data snapshot in data/ (and network for market data)"]
 addopts = "-m 'not snapshot'"
+
+[tool.ruff]
+line-length = 140
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM", "RUF"]
+ignore = [
+  "E501",    # line length is enforced by the formatter, not by the linter
+  "RUF001",  # Swedish and Italian text carries characters ruff reads as ambiguous
+  "RUF002",
+  "RUF003",
+  "SIM108",  # an if/else is often clearer than a ternary in the numeric code
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["B011"]
+
+[tool.ruff.format]
+line-ending = "lf"

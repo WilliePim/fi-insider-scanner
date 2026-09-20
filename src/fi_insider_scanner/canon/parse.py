@@ -1,7 +1,7 @@
-"""Parser dei valori FI: decimali con virgola, date, checkbox, ISIN, LEI.
+"""Parsers for the FI values: comma decimals, dates, checkboxes, ISIN, LEI.
 
-Ogni parser restituisce None quando il valore non è interpretabile; il chiamante
-registra l'errore se il campo grezzo non era vuoto. Mai valori stimati.
+Every parser returns None when the value cannot be read; the caller records an error if the raw field was
+not empty. No value is ever estimated.
 """
 
 from __future__ import annotations
@@ -51,7 +51,7 @@ def parse_date(raw: str | None) -> date | None:
 
 
 def ja_flag(raw: str | None) -> bool | None:
-    """`Ja` -> True, vuoto -> False, qualunque altro valore -> None (errore)."""
+    """`Ja` -> True, empty -> False, anything else -> None (an error)."""
     s = (raw or "").strip()
     if s == "":
         return False

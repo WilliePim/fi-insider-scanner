@@ -4,9 +4,7 @@ from fi_insider_scanner.canon.mapping import infer_instrument_types
 
 
 def frame(rows):
-    return pd.DataFrame(
-        rows, columns=["instrument_type_reported", "isin", "instrument_name", "issuer_name_raw", "isin_valid"]
-    )
+    return pd.DataFrame(rows, columns=["instrument_type_reported", "isin", "instrument_name", "issuer_name_raw", "isin_valid"])
 
 
 def test_tier1_same_isin_typed_elsewhere():

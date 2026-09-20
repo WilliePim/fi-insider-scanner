@@ -21,10 +21,10 @@ def test_scenario_values():
 
 
 def test_break_even_share():
-    # 100 osservati a media +3%, 20 non risolti, benchmark +5%: p* = 3 / (20 * 1,05)
+    # 100 observed at a mean of +3%, 20 unresolved, benchmark +5%: p* = 3 / (20 * 1.05)
     p = break_even_share(0.03, 100, 20, 0.05)
     assert p == pytest.approx(3 / 21)
-    added = int(round(p * 20 * 1000)) / 1000  # verifica: la media si annulla
+    # check: adding p*20 events at -100% brings the mean to zero
     mean = (100 * 0.03 + p * 20 * (-1 - 0.05)) / (100 + p * 20)
     assert mean == pytest.approx(0.0, abs=1e-12)
     assert break_even_share(-0.01, 100, 20, 0.05) is None
@@ -45,8 +45,22 @@ def test_acquired_likely():
 
 
 def summary(mean, t, ci=(0.01, 0.05), mde_=0.02):
-    return Summary(n=500, mean=mean, median=mean, sd=0.3, share_positive=0.5, t_iid=t, t_cr1_issuer=t, t_cr1_month=t,
-                   t_two_way=t, ci_low=ci[0], ci_high=ci[1], mde=mde_, n_issuers=200, n_months=100)
+    return Summary(
+        n=500,
+        mean=mean,
+        median=mean,
+        sd=0.3,
+        share_positive=0.5,
+        t_iid=t,
+        t_cr1_issuer=t,
+        t_cr1_month=t,
+        t_two_way=t,
+        ci_low=ci[0],
+        ci_high=ci[1],
+        mde=mde_,
+        n_issuers=200,
+        n_months=100,
+    )
 
 
 def test_verdict_rules():

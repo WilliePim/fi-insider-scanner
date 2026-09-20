@@ -3,7 +3,13 @@ import pandas as pd
 import pytest
 
 from fi_insider_scanner.market.fx import FxOrientationError, attach_values, check_orientation
-from fi_insider_scanner.market.prices import ScaleSegment, estimate_scale_segments, raw_close, scale_at, split_factor_after, verify_against_register
+from fi_insider_scanner.market.prices import (
+    estimate_scale_segments,
+    raw_close,
+    scale_at,
+    split_factor_after,
+    verify_against_register,
+)
 
 T = pd.Timestamp
 
@@ -67,7 +73,7 @@ def test_verify_against_register():
 
 
 def test_yahoo_rescaled_history_is_detected_and_verification_uses_recent_rows():
-    # Yahoo ha riscalato la storia prima del 2020-06-01 di 1/1,2 (emissione di diritti); il registro ha prezzi reali.
+    # Yahoo rescaled the history before 2020-06-01 by 1/1.2 (a rights issue); the register holds the real prices
     idx = pd.date_range("2019-01-01", "2021-12-31", freq="B")
     true_close = np.full(len(idx), 100.0)
     yahoo_close = np.where(idx < pd.Timestamp("2020-06-01"), true_close / 1.2, true_close)

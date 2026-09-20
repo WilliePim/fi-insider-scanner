@@ -1,8 +1,8 @@
-"""Profilo dello snapshot grezzo (checkpoint 1): conteggi, invarianti, regimi per anno."""
+"""Profile of the raw snapshot (checkpoint 1): counts, invariants, per-year regimes."""
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pandas as pd
 
@@ -11,8 +11,15 @@ from .bulk import Snapshot
 from .rawcsv import EXPECTED_HEADER, RawParseResult
 
 UPSTREAM_KEY = [
-    "Publiceringsdatum", "Emittent", "Anmälningsskyldig", "Person i ledande ställning", "Karaktär",
-    "ISIN", "Transaktionsdatum", "Volym", "Pris",
+    "Publiceringsdatum",
+    "Emittent",
+    "Anmälningsskyldig",
+    "Person i ledande ställning",
+    "Karaktär",
+    "ISIN",
+    "Transaktionsdatum",
+    "Volym",
+    "Pris",
 ]
 
 CANONICAL = {
@@ -63,25 +70,39 @@ def build_profile(raw: RawParseResult, snap: Snapshot) -> str:
     w = out.append
 
     w("# 00 — Profilo dello snapshot grezzo\n")
-    w(f"Generato {datetime.now(timezone.utc).isoformat(timespec='seconds')}.\n")
+    w(f"Generato {datetime.now(UTC).isoformat(timespec='seconds')}.\n")
     w("## Fonte\n")
-    w(md_table(pd.DataFrame([
-        ("repo", "civictechsweden/oppna-insynsregistret"),
-        ("commit dati", snap.commit_sha),
-        ("data commit", snap.commit_date),
-        ("sha256", snap.sha256),
-        ("byte", f"{snap.n_bytes:,}"),
-        ("encoding", f"{raw.encoding} (BOM: {'sì' if raw.had_bom else 'no'})"),
-    ], columns=["campo", "valore"])))
+    w(
+        md_table(
+            pd.DataFrame(
+                [
+                    ("repo", "civictechsweden/oppna-insynsregistret"),
+                    ("commit dati", snap.commit_sha),
+                    ("data commit", snap.commit_date),
+                    ("sha256", snap.sha256),
+                    ("byte", f"{snap.n_bytes:,}"),
+                    ("encoding", f"{raw.encoding} (BOM: {'sì' if raw.had_bom else 'no'})"),
+                ],
+                columns=["campo", "valore"],
+            )
+        )
+    )
 
     w("\n## Conteggi\n")
-    w(md_table(pd.DataFrame([
-        ("record fisici letti", raw.physical_records),
-        ("righe accettate", len(raw.rows)),
-        ("ricomposte (join)", raw.repairs.get("join", 0)),
-        ("celle con a capo normalizzate", raw.repairs.get("cell_break", 0)),
-        ("in quarantena", len(raw.quarantine)),
-    ], columns=["voce", "n"])))
+    w(
+        md_table(
+            pd.DataFrame(
+                [
+                    ("record fisici letti", raw.physical_records),
+                    ("righe accettate", len(raw.rows)),
+                    ("ricomposte (join)", raw.repairs.get("join", 0)),
+                    ("celle con a capo normalizzate", raw.repairs.get("cell_break", 0)),
+                    ("in quarantena", len(raw.quarantine)),
+                ],
+                columns=["voce", "n"],
+            )
+        )
+    )
     if not raw.quarantine.empty:
         w("\nRecord in quarantena (non ricomposti: la metà corrispondente non è adiacente, l'accoppiamento sarebbe una congettura):\n")
         q = raw.quarantine.copy()
@@ -101,8 +122,10 @@ def build_profile(raw: RawParseResult, snap: Snapshot) -> str:
     w(f"\nViolazioni dell'invariante (Korrigering=Ja ⟺ förstagång vuoto): **{violations}**.\n")
     exact = df.duplicated(subset=list(EXPECTED_HEADER)).sum()
     upstream = df.duplicated(subset=UPSTREAM_KEY).sum()
-    w(f"\nDuplicati esatti (22 campi): **{exact}**. Duplicati sulla chiave upstream a 9 campi: **{upstream}** "
-      "(la dedup civictech li ha già fusi: righe identiche reali perse a monte, non recuperabili dal bulk).\n")
+    w(
+        f"\nDuplicati esatti (22 campi): **{exact}**. Duplicati sulla chiave upstream a 9 campi: **{upstream}** "
+        "(la dedup civictech li ha già fusi: righe identiche reali perse a monte, non recuperabili dal bulk).\n"
+    )
 
     w("\n## Valori vuoti per colonna e anno di pubblicazione (%)\n")
     empty = df[list(EXPECTED_HEADER)].eq("").groupby(df["_year"]).mean().T * 100
@@ -112,12 +135,19 @@ def build_profile(raw: RawParseResult, snap: Snapshot) -> str:
     per_day = pub.dt.normalize().value_counts().sort_index()
     all_weekdays = pd.bdate_range(per_day.index.min(), per_day.index.max())
     zero_days = all_weekdays.difference(per_day.index)
-    w(md_table(pd.DataFrame([
-        ("massimo righe in un giorno", int(per_day.max())),
-        ("giorno con il massimo", str(per_day.idxmax().date())),
-        ("giorni con ≥ 1.000 righe (sospetto troncamento export)", int((per_day >= 1000).sum())),
-        ("giorni lun-ven senza righe (include festivi svedesi)", len(zero_days)),
-    ], columns=["voce", "valore"])))
+    w(
+        md_table(
+            pd.DataFrame(
+                [
+                    ("massimo righe in un giorno", int(per_day.max())),
+                    ("giorno con il massimo", str(per_day.idxmax().date())),
+                    ("giorni con ≥ 1.000 righe (sospetto troncamento export)", int((per_day >= 1000).sum())),
+                    ("giorni lun-ven senza righe (include festivi svedesi)", len(zero_days)),
+                ],
+                columns=["voce", "valore"],
+            )
+        )
+    )
     zero_by_year = pd.Series(zero_days.year.astype(str)).value_counts().sort_index()
     w("\nGiorni lun-ven senza righe per anno (festivi inclusi; ~10-12/anno attesi):\n")
     w(md_table(zero_by_year.rename_axis("anno").reset_index(name="giorni")))
@@ -133,7 +163,14 @@ def build_profile(raw: RawParseResult, snap: Snapshot) -> str:
     q["> 30 gg (%)"] = (lag > 30).groupby(df["_year"]).mean() * 100
     w(md_table(q.round(1), digits=1, index=True))
 
-    for col, top in (("Karaktär", None), ("Instrumenttyp", None), ("Valuta", None), ("Volymsenhet", None), ("Handelsplats", 20), ("Status", None)):
+    for col, top in (
+        ("Karaktär", None),
+        ("Instrumenttyp", None),
+        ("Valuta", None),
+        ("Volymsenhet", None),
+        ("Handelsplats", 20),
+        ("Status", None),
+    ):
         w(f"\n## {col} per anno di pubblicazione\n")
         w(md_table(_by_year(df, col, top), digits=0, index=True))
 

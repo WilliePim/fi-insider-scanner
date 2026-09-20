@@ -1,11 +1,11 @@
-"""Routine (ADR-021).
+"""Routine purchases (ADR-021).
 
-Interpretazione di "numero acquisti 12 mesi ÷ taglia mediana": un piano si riconosce da
-molti mesi con acquisti E importi mensili quasi uguali.
-- mesi con acquisti nei 365 giorni prima di T >= 6
-- dispersione = mediana(|x - mediana|) / mediana dei valori mensili in SEK <= 0,25
-Label CMP (stesso mese di calendario nei 3 blocchi di 365 giorni) calcolata per ogni persona,
-solo informativa.
+Reading of the brief's "12-month purchase count ÷ median size": a plan shows up as many months with
+purchases AND near-identical monthly amounts.
+- months with purchases in the 365 days before T >= 6
+- dispersion = median(|x - median|) / median of the monthly SEK values <= 0.25
+The CMP label (the same calendar month in each of the three 365-day blocks) is computed for every person
+and is informative only.
 """
 
 from __future__ import annotations

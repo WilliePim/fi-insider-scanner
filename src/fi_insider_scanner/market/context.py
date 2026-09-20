@@ -1,14 +1,14 @@
-"""Contesto di mercato per emittente: ticker verificato, storia prezzi, azioni, split, date report."""
+"""Per-issuer market context: verified ticker, price history, share counts, splits, report dates."""
 
 from __future__ import annotations
 
-from functools import lru_cache
+from functools import cache
 
 import pandas as pd
 
 from ..backtest.events import MarketContext
 from . import yf_cache
-from .prices import ScaleSegment
+from .prices import ScaleSegment, split_ratios
 
 
 def parse_segments(text) -> list[ScaleSegment]:
@@ -23,10 +23,10 @@ def parse_segments(text) -> list[ScaleSegment]:
 
 
 class YahooMarket:
-    """Callable `(issuer_key, isin) -> MarketContext` usato da eventi e gate.
+    """Callable `(issuer_key, isin) -> MarketContext` used by events and gates.
 
-    Ticker: quello dell'ISIN dell'evento se non rifiutato (verified True o None); altrimenti il
-    ticker verificato di un altro ISIN azionario dello stesso emittente (per azioni e date report).
+    Ticker: the one of the event's ISIN unless it was rejected (verified True or None); otherwise the verified
+    ticker of another share ISIN of the same issuer (for share counts and report dates).
     """
 
     def __init__(self, resolution: pd.DataFrame, with_reports: bool = True, primary_only_verified: bool = False):
@@ -34,13 +34,13 @@ class YahooMarket:
         res["ok"] = res["verified"].map(lambda v: v is True or v == 1)
         res["none"] = res["verified"].isna()
         usable = res[res["ok"] | (res["none"] & (not primary_only_verified))]
-        self._by_isin = dict(zip(usable["isin"], usable["symbol"]))
-        self._verified_by_isin = dict(zip(res["isin"], res["ok"]))
+        self._by_isin = dict(zip(usable["isin"], usable["symbol"], strict=True))
+        self._verified_by_isin = dict(zip(res["isin"], res["ok"], strict=True))
         segs = res["scale_segments"] if "scale_segments" in res else pd.Series([""] * len(res), index=res.index)
         best: dict[str, tuple[int, list[ScaleSegment]]] = {}
-        for sym, text, nrows in zip(res["symbol"], segs, res["n_rows"]):
+        for sym, text, nrows in zip(res["symbol"], segs, res["n_rows"], strict=True):
             parsed = parse_segments(text)
-            # per simbolo tengo i tratti dell'ISIN con più righe (lo stesso ticker può servire più ISIN storici)
+            # per symbol keep the segments of the ISIN with the most rows (one ticker can serve several historical ISINs)
             if parsed and (sym not in best or nrows > best[sym][0]):
                 best[sym] = (int(nrows), parsed)
         self._segments_by_symbol = {k: v[1] for k, v in best.items()}
@@ -60,24 +60,31 @@ class YahooMarket:
         return self._segments_by_symbol.get(symbol, []) if symbol else []
 
     def symbol_for_isin(self, isin: str | None) -> str | None:
-        """Solo il ticker dell'ISIN stesso (verificato o non verificabile): nessun ripiego su altre classi."""
+        """Only the ticker of that ISIN (verified or unverifiable): never a fallback to another share class."""
         return self._by_isin.get(isin) if isin is not None else None
 
     def issuer_symbols(self) -> dict[str, str]:
         return dict(self._by_issuer)
 
     @staticmethod
-    @lru_cache(maxsize=None)
+    @cache
     def history(symbol: str) -> pd.DataFrame | None:
         return yf_cache.history(symbol)
 
     @staticmethod
-    @lru_cache(maxsize=None)
+    @cache
     def shares(symbol: str) -> pd.Series | None:
         return yf_cache.shares_full(symbol)
 
+    @classmethod
+    @cache
+    def splits(cls, symbol: str | None) -> pd.Series:
+        """Split ratios of a symbol, cached: the hot paths must not rescan the price history."""
+        history = cls.history(symbol) if symbol else None
+        return split_ratios(history) if history is not None else pd.Series(dtype=float)
+
     @staticmethod
-    @lru_cache(maxsize=None)
+    @cache
     def reports(symbol: str) -> pd.DatetimeIndex | None:
         return yf_cache.earnings_dates(symbol)
 

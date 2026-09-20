@@ -1,7 +1,6 @@
-"""Tassonomie del registro: Karaktär, Handelsplats, Befattning, Instrumenttyp.
+"""Register taxonomies: Karaktär, Handelsplats, Befattning, Instrumenttyp.
 
-Tutti i valori osservati devono mappare (test snapshot). Un valore sconosciuto
-diventa UNMAPPED e non può mai essere segnale.
+Every observed value must map (snapshot test). An unknown value becomes UNMAPPED and can never be a signal.
 """
 
 from __future__ import annotations
@@ -106,14 +105,38 @@ KARAKTAR_MAP: dict[str, TxnKind] = {
 }
 
 _PLUS = {
-    K.ACQ_PURCHASE, K.SUBSCRIPTION, K.GRANT, K.EXERCISE_IN, K.GIFT_IN, K.LOAN_IN, K.LOAN_RETURN_IN,
-    K.EXCHANGE_IN, K.CONVERSION_IN, K.DIVIDEND_IN, K.MERGER_IN, K.DEMERGER_IN, K.INTERNAL_IN,
-    K.INHERITANCE_IN, K.DIVISION_IN,
+    K.ACQ_PURCHASE,
+    K.SUBSCRIPTION,
+    K.GRANT,
+    K.EXERCISE_IN,
+    K.GIFT_IN,
+    K.LOAN_IN,
+    K.LOAN_RETURN_IN,
+    K.EXCHANGE_IN,
+    K.CONVERSION_IN,
+    K.DIVIDEND_IN,
+    K.MERGER_IN,
+    K.DEMERGER_IN,
+    K.INTERNAL_IN,
+    K.INHERITANCE_IN,
+    K.DIVISION_IN,
 }
 _MINUS = {
-    K.DISP_SALE, K.EXERCISE_OUT, K.GIFT_OUT, K.LOAN_OUT, K.LOAN_RETURN_OUT, K.EXCHANGE_OUT,
-    K.CONVERSION_OUT, K.DIVIDEND_OUT, K.MERGER_OUT, K.DEMERGER_OUT, K.INTERNAL_OUT,
-    K.INHERITANCE_OUT, K.DIVISION_OUT, K.REDEMPTION, K.SHORT,
+    K.DISP_SALE,
+    K.EXERCISE_OUT,
+    K.GIFT_OUT,
+    K.LOAN_OUT,
+    K.LOAN_RETURN_OUT,
+    K.EXCHANGE_OUT,
+    K.CONVERSION_OUT,
+    K.DIVIDEND_OUT,
+    K.MERGER_OUT,
+    K.DEMERGER_OUT,
+    K.INTERNAL_OUT,
+    K.INHERITANCE_OUT,
+    K.DIVISION_OUT,
+    K.REDEMPTION,
+    K.SHORT,
 }
 
 EXCLUSION_BY_KIND: dict[TxnKind, str] = {
@@ -212,7 +235,7 @@ def is_on_venue(vc: VenueClass) -> bool:
     return vc not in (VenueClass.OFF_VENUE, VenueClass.UNKNOWN)
 
 
-# --- Befattning -> ruoli --------------------------------------------------------------
+# --- Befattning -> roles --------------------------------------------------------------
 
 _ROLE_RULES: list[tuple[str, re.Pattern]] = [
     ("employee_rep", re.compile(r"arbetstagarrepresentant|arbetstagarsuppleant|employee representative")),
@@ -222,16 +245,22 @@ _ROLE_RULES: list[tuple[str, re.Pattern]] = [
     ("cfo", re.compile(r"ekonomichef|finanschef|finansdirektör|\bcfo\b|chief financial|ekonomi\s*/|ekonomidirektör")),
     ("chair", re.compile(r"(?<!vice )(styrelse)?ordförande|chairman|\bchair\b")),
     ("deputy_board", re.compile(r"suppleant|board deputy|deputy board|alternate")),
-    ("board", re.compile(
-        r"styrelseledamot|styrelsemedlem|\bledamot\b|board member|member of the board|board of directors|"
-        r"\bdirector\b|\bstyrelse\b|vice ordförande|adjungerad"
-    )),
-    ("other_exec", re.compile(
-        r"annan ledande befattningshavare|koncernledning|ledningsgrupp|\bchef\b|chef\b|\bhead\b|\bcoo\b|\bcto\b|"
-        r"\bcmo\b|\bcio\b|\bcco\b|\bcso\b|\bcpo\b|\bcdo\b|\bchro\b|general counsel|chefsjurist|affärsområde|"
-        r"business area|president|\bvp\b|\bsvp\b|\bevp\b|direktör|officer|manager|controller|ec member|"
-        r"management team|verkställande ledning|redovisningsansvarig"
-    )),
+    (
+        "board",
+        re.compile(
+            r"styrelseledamot|styrelsemedlem|\bledamot\b|board member|member of the board|board of directors|"
+            r"\bdirector\b|\bstyrelse\b|vice ordförande|adjungerad"
+        ),
+    ),
+    (
+        "other_exec",
+        re.compile(
+            r"annan ledande befattningshavare|koncernledning|ledningsgrupp|\bchef\b|chef\b|\bhead\b|\bcoo\b|\bcto\b|"
+            r"\bcmo\b|\bcio\b|\bcco\b|\bcso\b|\bcpo\b|\bcdo\b|\bchro\b|general counsel|chefsjurist|affärsområde|"
+            r"business area|president|\bvp\b|\bsvp\b|\bevp\b|direktör|officer|manager|controller|ec member|"
+            r"management team|verkställande ledning|redovisningsansvarig"
+        ),
+    ),
     ("owner_keyword", re.compile(r"ägare|\bowner\b|grundare|founder|aktieägare|shareholder|10\s*\+?\s*%")),
 ]
 
@@ -307,12 +336,12 @@ INSTRUMENT_MAP: dict[str, InstrumentType] = {
     }.items()
 }
 
-# Strumenti che segnalano un'emissione in corso (dilution veto / strutturale).
+# instruments that mark an issue in progress (dilution veto / structural)
 ISSUE_INSTRUMENTS = frozenset({InstrumentType.BTA, InstrumentType.BTU, InstrumentType.SUB_RIGHT, InstrumentType.INTERIM_SHARE})
 
 
 def instrument_type(raw: str | None) -> InstrumentType | None:
-    """None se vuoto; KeyError-safe: un valore sconosciuto non vuoto resta None (contato a parte)."""
+    """None when empty; KeyError-safe: an unknown non-empty value stays None (counted separately)."""
     return INSTRUMENT_MAP.get(_norm(raw))
 
 

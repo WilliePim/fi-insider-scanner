@@ -1,9 +1,9 @@
-"""Eventi A (analogo USA) e B (cluster Layer 1), valutati solo con `Register.visible()`.
+"""Column A events (the US analogue) and column B events (Layer-1 clusters), built only through `Register.visible()`.
 
-A: (emittente, giorno di pubblicazione) con >= 1 riga A_exact visibile; gate = dilution != BLOCKED.
-B: trigger cluster; gate Layer 1 valutati una volta a T.
-Il contesto di mercato (azioni, split, date report) è opzionale: senza, la crescita azioni e la
-soglia 10% del grande azionista restano sconosciute (dry-run del checkpoint 3).
+A: (issuer, publication day) with at least one visible A_exact row; gate = dilution != BLOCKED.
+B: cluster triggers, with the Layer-1 gates evaluated once, at T.
+The market context (shares, splits, report dates) is optional: without it, share growth and the 10%
+large-holder threshold stay unknown (the checkpoint 3 dry-run).
 """
 
 from __future__ import annotations
@@ -169,14 +169,14 @@ def build_b_events(register: Register, cfg: dict, market: MarketLookup = _no_mar
 
 
 def apply_cooldown(events: pd.DataFrame, days: int, date_col: str = "event_day") -> pd.DataFrame:
-    """Variante (b): per emittente, evento successivo solo oltre `days` giorni di calendario dall'ultimo tenuto."""
+    """Variant (b): per issuer, a later event is kept only beyond `days` calendar days from the last kept one."""
     if events.empty:
         return events
     keep = []
     gap = pd.Timedelta(days=days)
     for _, grp in events.sort_values([date_col]).groupby("issuer_key", sort=False):
         last = None
-        for idx, day in zip(grp.index, grp[date_col]):
+        for idx, day in zip(grp.index, grp[date_col], strict=True):
             if last is None or day - last > gap:
                 keep.append(idx)
                 last = day

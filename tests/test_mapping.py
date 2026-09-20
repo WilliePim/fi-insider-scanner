@@ -1,5 +1,4 @@
 import pandas as pd
-import pytest
 
 from fi_insider_scanner.canon.mapping import assign_issuer_keys, map_row, map_rows
 from fi_insider_scanner.ingest.rawcsv import EXPECTED_HEADER
@@ -8,7 +7,7 @@ from fi_insider_scanner.ingest.rawcsv import EXPECTED_HEADER
 def raw(line: str, record_id: str = "r:0") -> dict:
     fields = line.split(";")
     assert len(fields) == len(EXPECTED_HEADER)
-    return {"record_id": record_id, **dict(zip(EXPECTED_HEADER, fields))}
+    return {"record_id": record_id, **dict(zip(EXPECTED_HEADER, fields, strict=True))}
 
 
 VIMIAN = (

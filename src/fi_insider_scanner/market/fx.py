@@ -1,7 +1,7 @@
-"""Cambi in SEK alla data (ADR-026). Valuta nativa conservata; tasso e data salvati per riga.
+"""Exchange rates into SEK at a date (ADR-026). The native currency is kept; rate and date are stored per row.
 
-Serie yfinance: `SEK=X` = SEK per 1 USD; `EURSEK=X` = SEK per 1 EUR; ecc.
-Il tasso usato è l'ultimo disponibile <= data, con al massimo 7 giorni di distanza.
+yfinance series: `SEK=X` = SEK per USD, `EURSEK=X` = SEK per EUR, and so on.
+The rate used is the last one available on or before the date, at most 7 days earlier.
 """
 
 from __future__ import annotations
@@ -62,7 +62,7 @@ def _asof(series: pd.Series, dates: pd.Series) -> tuple[np.ndarray, np.ndarray]:
 
 
 def attach_values(df: pd.DataFrame, fx: dict[str, pd.Series]) -> pd.DataFrame:
-    """Aggiunge value_native, fx_sek_per_unit, fx_date, value_sek, fx_usdsek, value_usd."""
+    """Adds value_native, fx_sek_per_unit, fx_date, value_sek, fx_usdsek, value_usd."""
     out = df.copy()
     native = out["volume"].astype(float) * out["price"].astype(float)
     native = native.where(out["volume_unit"].eq("antal"))

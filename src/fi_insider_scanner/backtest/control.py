@@ -1,13 +1,14 @@
 """Matched control (ADR-031).
 
-Per ogni evento: peer = emittente diverso, stessa banda di market cap alla stessa data, nessuna
-riga B_row visibile a T con data di transazione in [D-60, D], log-cap più vicino; a parità
-issuer_key minore. Il pool è l'insieme degli emittenti del registro con ticker (passato dal chiamante,
-già con mcap alla data). Tutte le classi dell'emittente dell'evento sono escluse perché il pool è per
-emittente.
+For each event the peer is a different issuer of the register with a usable ticker, in the same
+market-cap band on the same date, with no visible open-market PDMR purchase in the previous 60 days,
+and the closest log market cap; ties go to the lower issuer key. Candidates are held as parallel
+numpy arrays because the peer pool is scanned once per event.
 """
 
 from __future__ import annotations
+
+from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
@@ -17,28 +18,56 @@ from ..gates.openmarket import b_row
 
 
 class QuietIndex:
-    """Righe B_row (emittente, data transazione, visibile da) per il controllo di "quiet"."""
+    """Open-market purchase rows, indexed by trade date, for the "quiet issuer" condition."""
 
     def __init__(self, register: Register):
-        tl = register.timeline()
-        rows = tl[b_row(tl)]
+        rows = register.timeline()
+        rows = rows[b_row(rows)].sort_values("trade_date", kind="stable")
         self.issuer = rows["issuer_key"].to_numpy()
         self.trade = rows["trade_date"].to_numpy()
         self.visible = rows["visible_from"].to_numpy()
 
     def active_issuers(self, as_of: pd.Timestamp, day: pd.Timestamp, quiet_days: int) -> set[str]:
-        start = np.datetime64(pd.Timestamp(day).normalize() - pd.Timedelta(days=quiet_days))
-        end = np.datetime64(pd.Timestamp(day).normalize())
-        m = (self.trade >= start) & (self.trade <= end) & (self.visible <= np.datetime64(pd.Timestamp(as_of)))
-        return set(self.issuer[m])
+        """Issuers with a purchase traded in [day − quiet_days, day] and already published at `as_of`."""
+        day = pd.Timestamp(day).normalize()
+        lo = self.trade.searchsorted(np.datetime64(day - pd.Timedelta(days=quiet_days)), side="left")
+        hi = self.trade.searchsorted(np.datetime64(day), side="right")
+        if hi <= lo:
+            return set()
+        window = slice(lo, hi)
+        return set(self.issuer[window][self.visible[window] <= np.datetime64(pd.Timestamp(as_of))])
 
 
-def pick_peer(event_issuer: str, event_mcap_usd: float, band: str, pool: pd.DataFrame, active: set[str]) -> pd.Series | None:
-    """`pool`: colonne issuer_key, symbol, mcap_usd, band (alla data dell'evento)."""
-    cand = pool[(pool["band"] == band) & (pool["issuer_key"] != event_issuer) & ~pool["issuer_key"].isin(active)]
-    cand = cand[np.isfinite(cand["mcap_usd"]) & (cand["mcap_usd"] > 0)]
-    if cand.empty or not event_mcap_usd > 0:
+@dataclass(frozen=True)
+class PeerCandidates:
+    """Peer pool at one date: parallel arrays, `band` holding the label or None."""
+
+    issuer_key: np.ndarray
+    symbol: np.ndarray
+    mcap_usd: np.ndarray
+    band: np.ndarray
+
+    @classmethod
+    def from_frame(cls, df: pd.DataFrame) -> PeerCandidates:
+        return cls(df["issuer_key"].to_numpy(), df["symbol"].to_numpy(), df["mcap_usd"].to_numpy(dtype=float), df["band"].to_numpy())
+
+
+@dataclass(frozen=True)
+class Peer:
+    issuer_key: str
+    symbol: str
+    mcap_usd: float
+
+
+def pick_peer(event_issuer: str, event_mcap_usd: float, band: str, candidates: PeerCandidates, active: set[str]) -> Peer | None:
+    eligible = (
+        (candidates.band == band) & (candidates.issuer_key != event_issuer) & np.isfinite(candidates.mcap_usd) & (candidates.mcap_usd > 0)
+    )
+    if active:
+        eligible &= ~np.isin(candidates.issuer_key, list(active))
+    if not eligible.any() or not event_mcap_usd > 0:
         return None
-    dist = np.abs(np.log(cand["mcap_usd"].to_numpy()) - np.log(event_mcap_usd))
-    cand = cand.assign(_dist=dist).sort_values(["_dist", "issuer_key"], kind="stable")
-    return cand.iloc[0]
+    index = np.flatnonzero(eligible)
+    distance = np.abs(np.log(candidates.mcap_usd[index]) - np.log(event_mcap_usd))
+    best = index[np.lexsort((candidates.issuer_key[index], distance))[0]]
+    return Peer(str(candidates.issuer_key[best]), str(candidates.symbol[best]), float(candidates.mcap_usd[best]))

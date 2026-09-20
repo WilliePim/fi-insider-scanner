@@ -1,4 +1,4 @@
-"""Liste Nasdaq Nordic (Stoccolma Main Market e First North): ISIN -> simbolo, solo titoli attivi."""
+"""Nasdaq Nordic lists (Stockholm Main Market and First North): ISIN -> symbol, active issues only."""
 
 from __future__ import annotations
 
@@ -37,5 +37,14 @@ def listings() -> pd.DataFrame:
     for cat in CATEGORIES:
         for r in _fetch(cat):
             if r.get("isin") and r.get("symbol"):
-                rows.append({"isin": r["isin"], "symbol": r["symbol"], "yahoo": yahoo_symbol(r["symbol"]), "name": r.get("fullName"), "currency": r.get("currency"), "segment": cat})
+                rows.append(
+                    {
+                        "isin": r["isin"],
+                        "symbol": r["symbol"],
+                        "yahoo": yahoo_symbol(r["symbol"]),
+                        "name": r.get("fullName"),
+                        "currency": r.get("currency"),
+                        "segment": cat,
+                    }
+                )
     return pd.DataFrame(rows).drop_duplicates("isin")

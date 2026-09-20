@@ -1,10 +1,10 @@
-"""Predicati di riga per il segnale (ADR-016) e motivi di esclusione.
+"""Row predicates for the signal (ADR-016) and the exclusion reasons.
 
-- base: Förvärv + azione (dichiarata o inferita) + non programma + prezzo > 0 + volume in Antal
-- A_exact:   base + valore >= soglia USD (parità col codice P USA, qualunque venue)
-- A_onvenue: A_exact + venue di negoziazione
-- B_row:     base + venue di negoziazione (nessuna soglia)
-Le funzioni lavorano su righe già filtrate da `Register.visible()`.
+- base: Förvärv + a share (declared or inferred) + not a programme + price > 0 + volume in Antal
+- A_exact:   base + value >= the USD threshold (parity with the US P code, any venue)
+- A_onvenue: A_exact + a trading venue
+- B_row:     base + a trading venue (no threshold)
+The functions work on rows already filtered by `Register.visible()`.
 """
 
 from __future__ import annotations
@@ -45,7 +45,7 @@ def b_row(v: pd.DataFrame) -> pd.Series:
 
 
 def exclusion_reason(v: pd.DataFrame) -> pd.Series:
-    """Perché una riga non è un acquisto base. Vuoto = acquisto base."""
+    """Why a row is not a base purchase. Empty = it is one."""
     kinds = {str(k): r for k, r in EXCLUSION_BY_KIND.items()}
     reason = v["txn_kind"].map(kinds).fillna("").astype("object")
     purchase = v["txn_kind"].eq(PURCHASE)
@@ -64,7 +64,7 @@ def exclusion_reason(v: pd.DataFrame) -> pd.Series:
 
 
 def sell_to_cover_candidates(v: pd.DataFrame, window_days: int) -> pd.Series:
-    """Avyttring entro `window_days` da un Tilldelning / Lösen ökning / riga di programma della stessa persona."""
+    """Avyttring within `window_days` of a Tilldelning / Lösen ökning / programme row of the same person."""
     sales = v[v["txn_kind"].eq(str(TxnKind.DISP_SALE))]
     triggers = v[v["txn_kind"].isin([str(TxnKind.GRANT), str(TxnKind.EXERCISE_IN)]) | v["is_share_program"].eq(True)]
     out = pd.Series(False, index=v.index)
@@ -72,7 +72,7 @@ def sell_to_cover_candidates(v: pd.DataFrame, window_days: int) -> pd.Series:
         return out
     trig = triggers.groupby(["issuer_key", "name_key"])["trade_date"].apply(lambda s: s.sort_values().to_numpy())
     window = pd.Timedelta(days=window_days)
-    for idx, issuer, person, day in zip(sales.index, sales["issuer_key"], sales["name_key"], sales["trade_date"]):
+    for idx, issuer, person, day in zip(sales.index, sales["issuer_key"], sales["name_key"], sales["trade_date"], strict=True):
         arr = trig.get((issuer, person))
         if arr is None or pd.isna(day):
             continue
